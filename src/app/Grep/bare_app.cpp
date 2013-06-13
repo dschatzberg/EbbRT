@@ -15,20 +15,28 @@
   You should have received a copy of the GNU Affero General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef EBBRT_ARCH_INET_HPP
-#define EBBRT_ARCH_INET_HPP
+#include "app/app.hpp"
+#include "ebb/EbbManager/EbbManager.hpp"
+#include "ebb/PCI/PCI.hpp"
+#include "ebb/Ethernet/VirtioNet.hpp"
+#include "ebb/FileSystem/FileSystem.hpp"
+#include "ebb/MessageManager/MessageManager.hpp"
 
-#include <cstdint>
+using namespace ebbrt;
 
-namespace ebbrt {
-  inline uint16_t htons(uint16_t hostshort);
-  inline uint16_t ntohs(uint16_t nettshort);
+void
+app::start()
+{
+  pci = EbbRef<PCI>(ebb_manager->AllocateId());
+  ebb_manager->Bind(PCI::ConstructRoot, pci);
+  ethernet = EbbRef<Ethernet>(ebb_manager->AllocateId());
+  ebb_manager->Bind(VirtioNet::ConstructRoot, ethernet);
+
+  message_manager->StartListening();
+
+  file_system->ReadFile("/tmp/test",
+                        [](const char* data, uint64_t len) {
+                          lrt::console::write(data);
+                        },
+                        1024);
 }
-
-#ifdef ARCH_X86_64
-#include "arch/x86_64/inet.hpp"
-#else
-#error "Unsupported Architecture"
-#endif
-
-#endif

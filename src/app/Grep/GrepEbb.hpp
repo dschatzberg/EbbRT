@@ -15,17 +15,23 @@
   You should have received a copy of the GNU Affero General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "app/app.hpp"
-#include "ebb/EbbManager/EbbManager.hpp"
-#include "ebb/Ethernet/RawSocket.hpp"
-#include "ebb/MessageManager/MessageManager.hpp"
+#ifndef EBBRT_EBB_GREPEBB_GREPEBB_HPP
+#define EBBRT_EBB_GREPEBB_GREPEBB_HPP
 
-using namespace ebbrt;
+#include <functional>
+#include <string>
 
-void
-app::start()
-{
-  ethernet = EbbRef<Ethernet>(ebb_manager->AllocateId());
-  ebb_manager->Bind(RawSocket::ConstructRoot, ethernet);
-  message_manager->StartListening();
+#include "ebb/ebb.hpp"
+
+namespace ebbrt {
+  class GrepEbb : public EbbRep {
+  public:
+    static EbbRoot* ConstructRoot();
+
+
+  };
+
+  const EbbRef<GrepEbb> grep_ebb =
+    EbbRef<GrepEbb>(lrt::trans::find_static_ebb_id("GrepEbb"));
 }
+#endif

@@ -15,6 +15,8 @@
   You should have received a copy of the GNU Affero General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include <sstream>
+
 #include "app/app.hpp"
 #include "ebb/EbbManager/EbbManager.hpp"
 #include "ebb/PCI/PCI.hpp"
@@ -22,8 +24,11 @@
 #include "ebb/FileSystem/FileSystem.hpp"
 #include "ebb/MessageManager/MessageManager.hpp"
 
-using namespace ebbrt;
+namespace {
+  int foo = 0;
+}
 
+using namespace ebbrt;
 void
 app::start()
 {
@@ -34,9 +39,15 @@ app::start()
 
   message_manager->StartListening();
 
-  file_system->ReadFile("/tmp/test",
-                        [](const char* data, uint64_t len) {
-                          lrt::console::write(data);
-                        },
-                        1024);
+  file_system->OpenReadStream("/dev/zero",
+                              //When we receive the stream...
+                              [] (EbbRef<Stream> stream)
+                              {
+                                stream->Attach([] (const char* buf,
+                                                   size_t size) {
+                                                 std::ostringstream stream;
+                                                 stream << foo++ << std::endl;
+                                                 lrt::console::write(stream.str().c_str());
+                                               }, Stream::Divide);
+                              });
 }

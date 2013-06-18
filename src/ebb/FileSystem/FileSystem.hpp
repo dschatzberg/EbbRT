@@ -22,6 +22,7 @@
 #include <string>
 
 #include "ebb/ebb.hpp"
+#include "ebb/Stream/Stream.hpp"
 
 namespace ebbrt {
   class FileSystem : public EbbRep {
@@ -29,21 +30,47 @@ namespace ebbrt {
     static EbbRoot* ConstructRoot();
 
     FileSystem();
-    typedef std::function<void(const char*, uint64_t)> complete_func;
-    virtual void ReadFile(const char* name,
-                          complete_func,
-                          uint64_t length,
-                          uint64_t offset = 0);
+
+    typedef std::function<void(EbbRef<Stream>)> OpenCallback;
+    virtual void OpenReadStream(const char* filename,
+                                OpenCallback callback,
+                                uint64_t offset = 0,
+                                int64_t length = -1);
+
+
     virtual void HandleMessage(NetworkId from,
                                const char* buf,
                                size_t len) override;
   private:
-    void HandleReadComplete(const NetworkId& from,
-                            const char* buf,
-                            size_t len);
+    enum FSOp {
+      OPEN_READ,
+      OPEN_READ_REPLY
+    };
+
+    class OpenReadMessage {
+    public:
+      FSOp op;
+      unsigned op_id;
+      uint64_t offset;
+      int64_t length;
+      char filename[0];
+    };
+
+    class OpenReadReplyMessage {
+    public:
+      FSOp op;
+      unsigned op_id;
+      EbbId stream_id;
+    };
+
+    void HandleOpenRead(NetworkId id,
+                        const OpenReadMessage& message);
+    void HandleOpenReadReply(NetworkId id,
+                             const OpenReadReplyMessage& message);
+
     std::atomic_uint op_id_;
     Spinlock lock_;
-    std::unordered_map<unsigned, complete_func> cb_map_;
+    std::unordered_map<unsigned, OpenCallback> cb_map_;
   };
   const EbbRef<FileSystem> file_system =
     EbbRef<FileSystem>(lrt::trans::find_static_ebb_id("FileSystem"));

@@ -192,7 +192,7 @@ ebbrt::VirtioNet::Send(BufferList buffers,
   // Currently we don't handle the case when we have not enough free
   // descriptors
   LRT_ASSERT((buffers.size() + 1) < send_.num_free);
-
+  send_.num_free -= buffers.size() + 1;
   uint16_t head = send_.free_head;
 
   if (cb) {
@@ -240,36 +240,33 @@ ebbrt::VirtioNet::MacAddress()
 void
 ebbrt::VirtioNet::SendComplete()
 {
-  uint16_t index;
-  do {
-    index = send_.used->index;
-    while (send_.last_used != index) {
-      auto last_used = send_.last_used % send_.size;
-      auto desc = send_.used->ring[last_used].index;
-      int freed = 1;
-      auto i = desc;
-      while (send_.descs[i].flags.next) {
-        i = send_.descs[i].next;
-        freed++;
-      }
-      send_.lock.Lock();
-      send_.descs[i].next = send_.free_head;
-      send_.free_head = desc;
-      send_.num_free += freed;
-      send_.lock.Unlock();
-      cb_map_lock_.Lock();
-      auto it = cb_map_.find(desc);
-      if (it != cb_map_.end()) {
-        auto f = it->second;
-        cb_map_.erase(desc);
-        cb_map_lock_.Unlock();
-        f();
-      } else {
-        cb_map_lock_.Unlock();
-      }
-      send_.last_used++;
+  auto index = send_.used->index;
+  while (send_.last_used != index) {
+    auto last_used = send_.last_used % send_.size;
+    auto desc = send_.used->ring[last_used].index;
+    int freed = 1;
+    auto i = desc;
+    while (send_.descs[i].flags.next) {
+      i = send_.descs[i].next;
+      freed++;
     }
-  } while (index != send_.used->index);
+    send_.lock.Lock();
+    send_.descs[i].next = send_.free_head;
+    send_.free_head = desc;
+    send_.num_free += freed;
+    send_.lock.Unlock();
+    cb_map_lock_.Lock();
+    auto it = cb_map_.find(desc);
+    if (it != cb_map_.end()) {
+      auto f = it->second;
+      cb_map_.erase(desc);
+      cb_map_lock_.Unlock();
+      f();
+    } else {
+      cb_map_lock_.Unlock();
+    }
+    send_.last_used++;
+  }
 }
 
 void
@@ -282,8 +279,10 @@ ebbrt::VirtioNet::Register(uint16_t ethertype,
 void
 ebbrt::VirtioNet::Receive()
 {
+  //FIXME: temporarily disable interrupts as an optimization
   int avail_index = receive_.available->index;
-  while (receive_.last_used != receive_.used->index) {
+  auto used_index = receive_.used->index;
+  while (receive_.last_used != used_index) {
     auto last_used = receive_.last_used % receive_.size;
     auto desc = receive_.used->ring[last_used].index;
 

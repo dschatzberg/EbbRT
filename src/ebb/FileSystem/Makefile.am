@@ -16,4 +16,5 @@
 EXTRA_LIBRARIES += src/ebb/FileSystem/libFileSystem.a
 
 src_ebb_FileSystem_libFileSystem_a_SOURCES = \
-	src/ebb/FileSystem/FileSystem.cpp
+	src/ebb/FileSystem/FileSystem.cpp \
+	src/ebb/FileSystem/FileStream.cpp

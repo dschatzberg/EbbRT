@@ -34,7 +34,8 @@ src_app_Grep_Grep_ebbs = \
 	src/ebb/MemoryAllocator/libSimpleMemoryAllocator.a \
 	src/ebb/EventManager/libSimpleEventManager.a \
 	src/ebb/MessageManager/libMessageManager.a \
-	src/ebb/FileSystem/libFileSystem.a
+	src/ebb/FileSystem/libFileSystem.a \
+	src/ebb/WorkBag/libWorkBag.a
 
 
 if LRT_ULNX

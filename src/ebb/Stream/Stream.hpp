@@ -15,17 +15,30 @@
   You should have received a copy of the GNU Affero General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "app/app.hpp"
-#include "ebb/EbbManager/EbbManager.hpp"
-#include "ebb/Ethernet/RawSocket.hpp"
-#include "ebb/MessageManager/MessageManager.hpp"
+#ifndef EBBRT_EBB_STREAM_STREAM_HPP
+#define EBBRT_EBB_STREAM_STREAM_HPP
 
-using namespace ebbrt;
+#include <functional>
 
-void
-app::start()
-{
-  ethernet = EbbRef<Ethernet>(ebb_manager->AllocateId());
-  ebb_manager->Bind(RawSocket::ConstructRoot, ethernet);
-  message_manager->StartListening();
+#include "ebb/ebb.hpp"
+
+namespace ebbrt {
+  class StreamProcessor : public EbbRep {
+  public:
+    virtual void Process(const char*, size_t) = 0;
+  };
+
+  class Stream : public EbbRep {
+  public:
+    enum Split {
+      Duplicate,
+      Divide
+    };
+    virtual void Attach(std::function<void(const char*, size_t)> processor,
+                        Split how_to_split) = 0;
+    virtual void Attach(EbbRef<StreamProcessor> processor,
+                        Split how_to_split) = 0;
+  };
 }
+
+#endif

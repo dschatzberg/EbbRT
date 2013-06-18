@@ -19,6 +19,7 @@
 #include "ebb/EbbManager/PrimitiveEbbManager.hpp"
 #include "ebb/EventManager/SimpleEventManager.hpp"
 #include "ebb/FileSystem/FileSystem.hpp"
+#include "ebb/FileSystem/FileStream.hpp"
 #include "ebb/MemoryAllocator/SimpleMemoryAllocator.hpp"
 #include "ebb/MessageManager/MessageManager.hpp"
 
@@ -58,6 +59,10 @@ constexpr ebbrt::app::Config::InitEbb init_ebbs[] =
   {
     .create_root = ebbrt::FileSystem::ConstructRoot,
     .name = "FileSystem"
+  },
+  {
+    .create_root = ebbrt::FileStream::ConstructRoot,
+    .name = "FileStream"
   }
 };
 
@@ -68,7 +73,8 @@ constexpr ebbrt::app::Config::StaticEbbId static_ebbs[] = {
   {.name = "Syscall", .id = 4},
   {.name = "EventManager", .id = 5},
   {.name = "MessageManager", .id = 6},
-  {.name = "FileSystem", .id = 7}
+  {.name = "FileSystem", .id = 7},
+  {.name = "FileStream", .id = 8}
 };
 
 const ebbrt::app::Config ebbrt::app::config = {

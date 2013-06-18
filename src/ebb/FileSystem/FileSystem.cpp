@@ -20,10 +20,7 @@
 #include "ebb/MessageManager/MessageManager.hpp"
 
 #ifdef __linux__
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include "ebb/FileSystem/FileStream.hpp"
 #endif
 
 ebbrt::EbbRoot*
@@ -36,38 +33,30 @@ ebbrt::FileSystem::FileSystem() : op_id_{0}
 {
 }
 
-namespace {
-  class FSHeader {
-  public:
-    unsigned op_id;
-    enum {
-      READ,
-      READ_RETURN
-    } op;
-    uint64_t length;
-    uint64_t offset;
-  };
-}
-
 void
-ebbrt::FileSystem::ReadFile(const char* name,
-                            std::function<void(const char*, uint64_t)> cb,
-                            uint64_t length,
-                            uint64_t offset)
+ebbrt::FileSystem::OpenReadStream(const char* filename,
+                                  OpenCallback callback,
+                                  uint64_t offset,
+                                  int64_t length)
 {
 #ifdef __linux__
   assert(0);
 #elif __ebbrt__
-  //FIXME: should check length restrictions
-  auto header = new FSHeader;
-  unsigned op_id = op_id_.fetch_add(1, std::memory_order_relaxed);
-  header->op_id = op_id;
-  header->op = FSHeader::READ;
-  header->length = length;
-  header->offset = offset;
+  // Create message
+  auto message = new OpenReadMessage;
+  // get a new op_id
+  auto op_id = op_id_.fetch_add(1, std::memory_order_relaxed);
+  message->op_id = op_id;
+  message->op = FSOp::OPEN_READ;
+  message->offset = offset;
+  message->length = length;
+
+  // Construct the buffer list
   BufferList list {
-    std::pair<const void*, size_t>(header, sizeof(FSHeader)),
-      std::pair<const void*, size_t>(name, strlen(name) + 1)};
+    std::pair<const void*, size_t>(message, sizeof(OpenReadMessage)),
+      std::pair<const void*, size_t>(filename, strlen(filename) + 1)};
+
+  //FIXME: currently hardcoded network id
   NetworkId id;
   id.mac_addr[0] = 0xff;
   id.mac_addr[1] = 0xff;
@@ -75,71 +64,70 @@ ebbrt::FileSystem::ReadFile(const char* name,
   id.mac_addr[3] = 0xff;
   id.mac_addr[4] = 0xff;
   id.mac_addr[5] = 0xff;
+
+  // store callback for later
   lock_.Lock();
-  cb_map_[op_id] = cb;
+  cb_map_[op_id] = callback;
   lock_.Unlock();
+
+  // Send message
   message_manager->Send(id, file_system, std::move(list),
+                        //Make sure to free the message when done
                         [=]() {
-                          free(header);
+                          free(message);
                         });
 #endif
 }
 
-namespace {
-  using namespace ebbrt;
-  void handle_read(const NetworkId& from,
-                   const char* buf,
-                   size_t len)
-  {
-#ifdef __linux__
-    auto path = buf + sizeof(FSHeader);
-    auto fd = open(path, O_RDONLY);
-    if (fd == -1) {
-      throw std::runtime_error("Open failed");
-    }
-    auto header = reinterpret_cast<const FSHeader*>(buf);
-    auto newbuf = new char[header->length];
-    auto read_ret = read(fd, newbuf, header->length);
-    close(fd);
-    if (read_ret == -1) {
-      throw std::runtime_error("Read failed");
-    }
-    auto newheader = new FSHeader;
-    newheader->op_id = header->op_id;
-    newheader->length = read_ret;
-    newheader->op = FSHeader::READ_RETURN;
-    BufferList list {
-      std::pair<const void*, size_t>(newheader, sizeof(FSHeader)),
-        std::pair<const void*, size_t>(newbuf, read_ret)};
-    message_manager->Send(from, file_system, std::move(list),
-                          [=]() {
-                            free(newbuf);
-                            free(newheader);
-                          });
-#elif __ebbrt__
-    LRT_ASSERT(0);
-#endif
-  }
-}
 void
-ebbrt::FileSystem::HandleReadComplete(const NetworkId& from,
-                                      const char* buf,
-                                      size_t len)
+ebbrt::FileSystem::HandleOpenRead(NetworkId from,
+                                  const OpenReadMessage& message)
 {
 #ifdef __linux__
+  // Construct new file stream
+  // EbbRef<FileStream> file_stream{ebb_manager->AllocateId()};
+  // ebb_manager->Bind(FileStream::ConstructRoot, file_stream);
+  //FIXME: We can't do remote misses yet so this is statically built
+
+  //FIXME: Because we can't pass parameters to constructors yet
+  file_stream->Open(message.filename, message.offset, message.length);
+
+  // Construct Reply
+  auto new_message = new OpenReadReplyMessage;
+  new_message->op = OPEN_READ_REPLY;
+  new_message->op_id = message.op_id;
+  new_message->stream_id = file_stream;
+
+  BufferList list {
+    std::pair<const void*, size_t>(new_message, sizeof(*new_message))
+  };
+
+  // Send Reply
+  message_manager->Send(from, file_system, std::move(list),
+                        [=]() {
+                          free(new_message);
+                        });
+#elif __ebbrt__
+  LRT_ASSERT(0);
+#endif
+}
+
+void
+ebbrt::FileSystem::HandleOpenReadReply(NetworkId from,
+                                       const OpenReadReplyMessage& message)
+{
+#if __linux__
   assert(0);
 #elif __ebbrt__
-  auto header = reinterpret_cast<const FSHeader*>(buf);
+  // find callback
   lock_.Lock();
-  auto it = cb_map_.find(header->op_id);
-  if (it != cb_map_.end()) {
-    auto f = it->second;
-    cb_map_.erase(header->op_id);
-    lock_.Unlock();
-    f(buf + sizeof(FSHeader), len - sizeof(FSHeader));
-  } else {
-    lock_.Unlock();
-  }
+  auto it = cb_map_.find(message.op_id);
+  LRT_ASSERT(it != cb_map_.end());
+  auto& cb = it->second;
+  lock_.Unlock();
+
+  // call it!
+  cb(EbbRef<Stream>(message.stream_id));
 #endif
 }
 
@@ -148,18 +136,29 @@ ebbrt::FileSystem::HandleMessage(NetworkId from,
                                  const char* buf,
                                  size_t len)
 {
-#ifdef __linx__
-  assert(len >= sizeof(FSHeader));
+#ifdef __linux__
+  assert(len >= sizeof(FSOp));
 #elif __ebbrt__
-  LRT_ASSERT(len >= sizeof(FSHeader));
+  LRT_ASSERT(len >= sizeof(FSOp));
 #endif
-  auto header = reinterpret_cast<const FSHeader*>(buf);
-  switch (header->op) {
-  case FSHeader::READ:
-    handle_read(from, buf, len);
+  auto op = reinterpret_cast<const FSOp*>(buf);
+  switch (*op) {
+  case FSOp::OPEN_READ:
+#ifdef __linux__
+    assert(len >= sizeof(OpenReadMessage));
+#elif __ebbrt__
+    LRT_ASSERT(len >= sizeof(OpenReadMessage));
+#endif
+    HandleOpenRead(from, *reinterpret_cast<const OpenReadMessage*>(buf));
     break;
-  case FSHeader::READ_RETURN:
-    HandleReadComplete(from, buf, len);
+  case FSOp::OPEN_READ_REPLY:
+#ifdef __linux__
+    assert(len >= sizeof(OpenReadReplyMessage));
+#elif __ebbrt__
+    LRT_ASSERT(len >= sizeof(OpenReadReplyMessage));
+#endif
+    HandleOpenReadReply(from,
+                        *reinterpret_cast<const OpenReadReplyMessage*>(buf));
     break;
   }
 }

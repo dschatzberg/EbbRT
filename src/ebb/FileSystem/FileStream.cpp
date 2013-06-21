@@ -51,7 +51,7 @@ ebbrt::FileStream::FileStream()
   uint8_t interrupt = event_manager->AllocateInterrupt([]() {
       file_stream->Send();
     });
-  lrt::event::register_fd(event_fd_, EPOLLIN, interrupt);
+  event_manager->RegisterFD(event_fd_, EPOLLIN, interrupt);
 #endif
 }
 

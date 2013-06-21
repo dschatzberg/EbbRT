@@ -15,25 +15,12 @@
   You should have received a copy of the GNU Affero General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef EBBRT_LRT_EVENT_HPP
-#error "Don't include this file directly"
-#endif
 
-#include <sys/epoll.h>
+#include "ebb/EventManager/EventManager.hpp"
+#include "lrt/event_impl.hpp"
 
-#include "lrt/Location.hpp"
-
-namespace ebbrt {
-  namespace lrt {
-    namespace event {
-      /**
-       * @brief Get cores location
-       *
-       * @return
-       */
-      Location get_location();
-
-      unsigned get_max_contexts();
-    }
-  }
+void
+ebbrt::lrt::event::process_event()
+{
+  event_manager->ProcessEvent();
 }

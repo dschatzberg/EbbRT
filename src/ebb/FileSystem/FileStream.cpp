@@ -44,7 +44,7 @@ ebbrt::FileStream::FileStream()
 #ifdef __linux__
   //FIXME: make configurable
   credits_ = 5;
-  event_fd_ = eventfd(1, EFD_NONBLOCK);
+  event_fd_ = eventfd(0, EFD_NONBLOCK);
   if (event_fd_ == -1) {
     throw std::runtime_error("eventfd failed");
   }
@@ -176,7 +176,6 @@ ebbrt::FileStream::HandleCredit()
 {
 #ifdef __linux__
   //FIXME: race condition here
-  std::cout << "Got Credit" << std::endl;
   if (credits_ == 0) {
     EnableSend();
   }
@@ -251,8 +250,6 @@ ebbrt::FileStream::Send()
   if (length_ != -1) {
     length_ -= ret;
   }
-
-  std::cout << "Sending data with credits = " << credits_ << std::endl;
 
   auto message = new DataMessage;
   message->op = DATA;

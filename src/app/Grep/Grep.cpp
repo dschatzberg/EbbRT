@@ -16,12 +16,14 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iostream>
 #include "ebbrt.hpp"
 
 int main()
 {
   ebbrt::EbbRT instance;
   ebbrt::Context context{instance};
+  std::cout << "Ready" << std::endl;
   context.Loop(-1);
   return 0;
 }

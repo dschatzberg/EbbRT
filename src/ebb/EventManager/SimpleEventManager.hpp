@@ -18,6 +18,7 @@
 #ifndef EBBRT_EBB_EVENTMANAGER_SIMPLEEVENTMANAGER_HPP
 #define EBBRT_EBB_EVENTMANAGER_SIMPLEEVENTMANAGER_HPP
 
+#include <forward_list>
 #include <unordered_map>
 
 #include "ebb/EventManager/EventManager.hpp"
@@ -30,7 +31,7 @@ namespace ebbrt {
 
     SimpleEventManager();
     virtual uint8_t AllocateInterrupt(std::function<void()> func) override;
-
+    virtual void Async(std::function<void()> func) override;
 #ifdef __linux__
     virtual void RegisterFD(int fd, uint32_t events, uint8_t interrupt) override;
 #endif
@@ -45,6 +46,11 @@ namespace ebbrt {
 #ifdef __linux__
     int epoll_fd_;
 #endif
+
+#ifdef __ebbrt__
+    bool fired_interrupt_;
+#endif
+    std::forward_list<std::function<void()> > asyncs_;
   };
 }
 

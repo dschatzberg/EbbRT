@@ -26,6 +26,7 @@
   .align 8
   .globl isr\num
   isr\num:
+    andq $(~(1 << 9)), 24(%rsp) //disable interrupt on iret
     pushq %rsp //store original rsp
     pushq (%rsp) //store it again right afterwards
     andq $-0x10, %rsp //align to 16 bytes

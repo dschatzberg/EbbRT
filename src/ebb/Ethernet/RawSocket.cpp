@@ -109,7 +109,7 @@ ebbrt::RawSocket::Send(BufferList buffers,
     free(aggregate);
   }
   if (cb) {
-    cb();
+    event_manager->Async(std::move(cb));
   }
 }
 

@@ -13,16 +13,10 @@
 
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-ebb_sources = \
-	src/ebb/ebb.hpp
+EXTRA_LIBRARIES += \
+	src/ebb/HashTable/libDistributedHashTable.a 
 
-include src/ebb/Console/Makefile.am
-include src/ebb/EbbManager/Makefile.am
-include src/ebb/Ethernet/Makefile.am
-include src/ebb/EventManager/Makefile.am
-include src/ebb/Gthread/Makefile.am
-include src/ebb/HashTable/Makefile.am
-include src/ebb/MemoryAllocator/Makefile.am
-include src/ebb/MessageManager/Makefile.am
-include src/ebb/PCI/Makefile.am
-include src/ebb/Syscall/Makefile.am
+src_ebb_HashTable_libDistributedHashTable_a_SOURCES = \
+	src/ebb/HashTable/HashTable.hpp \
+	src/ebb/HashTable/DistributedHashTable.cpp \
+	src/ebb/HashTable/DistributedHashTable.hpp

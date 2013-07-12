@@ -24,8 +24,7 @@
 ebbrt::DistributedHashTable::DistributedHashTable(){
   /* If non-initialized, the hashtable will act single-node*/
   myid_ = 0;
-  memcount_ = 1;
-  psize_ = std::numeric_limits<size_t>::max();
+  nodecount_ = 1;
 }
 
 ebbrt::EbbRoot*
@@ -34,7 +33,7 @@ ebbrt::DistributedHashTable::ConstructRoot()
   return new SharedRoot<DistributedHashTable>;
 }
 
-ebbrt::mapped_t
+ebbrt::HashTable::mapped_t
 ebbrt::DistributedHashTable::Get(key_t key)
 {
   auto hasher = table_.hash_function();
@@ -51,12 +50,10 @@ ebbrt::DistributedHashTable::Get(key_t key)
 }
 
 int
-ebbrt::DistributedHashTable::Init(id_t myid, unsigned int memcount)
+ebbrt::DistributedHashTable::Init(id_t myid, unsigned int nodecount)
 {
-  Flush(); 
   myid_ = myid;
-  memcount_ = memcount;
-  psize_ = std::numeric_limits<size_t>::max() / memcount_;
+  nodecount_ = nodecount;
   return 0;
 }
 
@@ -71,20 +68,3 @@ ebbrt::DistributedHashTable::Set(key_t key, mapped_t val)
   return 0;
 }
 
-int
-ebbrt::DistributedHashTable::Flush()
-{
-  table_.clear();
-  return 0;
-}
-
-int
-ebbrt::DistributedHashTable::Free(key_t key)
-{
-  auto hasher = table_.hash_function();
-  if(local(home(hasher(key))))
-    table_.erase(key);
-  else
-    std::cout << "DEBUG REMOTE FREE" << home(hasher(key)) << "\n";
-  return 0; 
-}

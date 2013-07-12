@@ -23,17 +23,13 @@
 #include "ebb/ebb.hpp"
 
 namespace ebbrt {
-  
-  typedef std::string key_t;
-  typedef std::string mapped_t;
-  typedef size_t hash_t;
-
   class HashTable : public EbbRep {
-  public:
-    virtual mapped_t Get(key_t key) = 0;
-    virtual int Set(key_t key, mapped_t val) = 0;
-    virtual int Flush() = 0;
-    virtual int Free(key_t key) = 0;
+    public:
+      typedef std::string key_t;
+      typedef std::string mapped_t;
+      typedef size_t hash_t;
+      virtual mapped_t Get(key_t key) = 0;
+      virtual int Set(key_t key, mapped_t val) = 0;
   };
 }
 #endif

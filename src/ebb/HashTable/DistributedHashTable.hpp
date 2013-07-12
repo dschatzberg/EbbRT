@@ -24,27 +24,20 @@
 #include "ebb/HashTable/HashTable.hpp"
 
 namespace ebbrt {
-
-  typedef int id_t;
-
   class DistributedHashTable : public HashTable {
-  public:
-    DistributedHashTable();
-    static EbbRoot* ConstructRoot();
-    virtual mapped_t Get(key_t key);
-    virtual int Init(id_t myid, unsigned int memcount);
-    virtual int Flush();
-    virtual int Free(key_t key);
-    virtual int Set(key_t key, mapped_t val);
-    std::unordered_map<key_t, mapped_t> table_;
-  private:
-    inline id_t 
-      home( hash_t h ) { return  h / psize_; }
-    inline bool
-      local( id_t i ) { return i == myid_; }
-    id_t myid_; 
-    size_t psize_;
-    unsigned int memcount_; 
+    public:
+      typedef int id_t;
+      DistributedHashTable();
+      static EbbRoot* ConstructRoot();
+      virtual mapped_t Get(key_t key) override;
+      virtual int Init(id_t myid, unsigned int nodecount);
+      virtual int Set(key_t key, mapped_t val) override;
+    private:
+      inline id_t home( hash_t h ) { return  h % nodecount_; }
+      inline bool local( id_t i ) { return i == myid_; }
+      id_t myid_; 
+      unsigned int nodecount_; 
+      std::unordered_map<key_t, mapped_t> table_;
   };
 }
 #endif

@@ -26,6 +26,7 @@ namespace ebbrt {
   
   typedef std::string key_t;
   typedef std::string mapped_t;
+  typedef size_t hash_t;
 
   class HashTable : public EbbRep {
   public:

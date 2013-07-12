@@ -16,9 +16,17 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include <iostream>
+#include <limits>
 
 #include "ebb/SharedRoot.hpp"
 #include "ebb/HashTable/DistributedHashTable.hpp"
+
+ebbrt::DistributedHashTable::DistributedHashTable(){
+  /* If non-initialized, the hashtable will act single-node*/
+  myid_ = 0;
+  memcount_ = 1;
+  psize_ = std::numeric_limits<size_t>::max();
+}
 
 ebbrt::EbbRoot*
 ebbrt::DistributedHashTable::ConstructRoot()
@@ -29,19 +37,37 @@ ebbrt::DistributedHashTable::ConstructRoot()
 ebbrt::mapped_t
 ebbrt::DistributedHashTable::Get(key_t key)
 {
-  auto it = table_.find(std::string(key));
-  if (it == table_.end()) {
-     std::cout <<  "NOKEY!";
-    exit(1); // FIXME - passbyvalue, change return type 
+  auto hasher = table_.hash_function();
+  if(local(home(hasher(key)))){
+    auto it = table_.find(std::string(key));
+    if (it == table_.end()) 
+      return "KEYNOTFOUND"; // FIXME pass-by-value, int return 
+    else
+      return it->second;
   }
+  else
+    std::cout << "DEBUG REMOTE GET" << home(hasher(key)) << "\n";
+  return "REMOTE_ERROR";
+}
 
-  return it->second;
+int
+ebbrt::DistributedHashTable::Init(id_t myid, unsigned int memcount)
+{
+  Flush(); 
+  myid_ = myid;
+  memcount_ = memcount;
+  psize_ = std::numeric_limits<size_t>::max() / memcount_;
+  return 0;
 }
 
 int
 ebbrt::DistributedHashTable::Set(key_t key, mapped_t val)
 {
-  table_[key] = val;
+  auto hasher = table_.hash_function();
+  if(local(home(hasher(key))))
+    table_[key] = val;
+  else
+    std::cout << "DEBUG REMOTE SET" << home(hasher(key)) << "\n";
   return 0;
 }
 
@@ -55,6 +81,10 @@ ebbrt::DistributedHashTable::Flush()
 int
 ebbrt::DistributedHashTable::Free(key_t key)
 {
-  table_.erase(key);
+  auto hasher = table_.hash_function();
+  if(local(home(hasher(key))))
+    table_.erase(key);
+  else
+    std::cout << "DEBUG REMOTE FREE" << home(hasher(key)) << "\n";
   return 0; 
 }

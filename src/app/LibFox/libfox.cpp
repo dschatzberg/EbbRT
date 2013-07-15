@@ -22,6 +22,7 @@
 
 #include <map>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -29,12 +30,51 @@ extern "C" {
 #include "src/app/LibFox/libfox.h"
 }
 
+#include "mpi.h"
+
+#include "src/ebbrt.hpp"
+#include "src/ebb/HashTable/HashTable.hpp"
+#include "src/ebb/MessageManager/MessageManager.hpp"
+
 
 struct fox_st {
-  fox_st(int nprocs_, int procid_) : nprocs{nprocs_}, procid{procid_} {}
-  std::vector<std::string> hosts;
-  std::multimap<std::string, std::string> queue;
-  std::unordered_map<std::string, std::string> table;
+  fox_st(int numproc, int myprocid) : table{ebbrt::hashtable},
+    invoke_context{instance}, nprocs{numproc}, procid{myprocid}
+  {
+    std::mutex m;
+    std::condition_variable cv;
+    bool finished = false;
+    listener = std::thread([&]() {
+        ebbrt::Context context{instance};
+        context.Activate();
+        if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS) {
+          throw std::runtime_error("MPI_Barrier failed");
+        }
+        ebbrt::message_manager->StartListening();
+        if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS) {
+          throw std::runtime_error("MPI_Barrier failed");
+        }
+        {
+          std::lock_guard<std::mutex> lk{m};
+          finished = true;
+          cv.notify_one();
+        }
+        context.Loop(-1);
+      });
+
+    listener.detach();
+
+    {
+      std::unique_lock<std::mutex> lk{m};
+      cv.wait(lk, [&]{return finished;});
+    }
+    invoke_context.Activate();
+  }
+
+  ebbrt::EbbRef<ebbrt::HashTable> table;
+  ebbrt::EbbRT instance;
+  ebbrt::Context invoke_context;
+  std::thread listener;
   int nprocs;
   int procid;
 };
@@ -43,11 +83,7 @@ extern "C"
 int
 fox_new(fox_ptr* fhand_ptr, int nprocs, int procid)
 {
-  try {
-    *fhand_ptr = new fox_st(nprocs, procid);
-  } catch (...) {
-    return -1;
-  }
+  *fhand_ptr = new fox_st(nprocs, procid);
   return 0;
 }
 
@@ -55,6 +91,8 @@ extern "C"
 int
 fox_free(fox_ptr fhand)
 {
+  while (1)
+    ;
   delete fhand;
   return 0;
 }
@@ -63,9 +101,6 @@ extern "C"
 int
 fox_flush(fox_ptr fhand, int term)
 {
-  fhand->queue.clear();
-  fhand->table.clear();
-
   return 0;
 }
 
@@ -73,7 +108,6 @@ extern "C"
 int
 fox_server_add(fox_ptr fhand, const char *hostlist)
 {
-  fhand->hosts.emplace_back(hostlist);
   return 0;
 }
 
@@ -83,10 +117,9 @@ fox_set(fox_ptr fhand,
         const char *key, size_t key_sz,
         const char *value, size_t value_sz)
 {
-  fhand->table.emplace(std::piecewise_construct,
-                        std::forward_as_tuple(key, key_sz),
-                        std::forward_as_tuple(value, value_sz));
-
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  fhand->table->Set(key, key_sz,
+                    value, value_sz);
   return 0;
 }
 
@@ -96,19 +129,22 @@ fox_get(fox_ptr fhand,
         const char *key, size_t key_sz,
         char **pvalue, size_t *pvalue_sz)
 {
-  auto it = fhand->table.find(std::string(key, key_sz));
-  if (it == fhand->table.end()) {
-    return -1;
-  }
-
-  char* buf = static_cast<char*>(malloc(it->second.length()));
-  if (buf == 0) {
-    return -1;
-  }
-  std::memcpy(buf, it->second.c_str(), it->second.length());
-  *pvalue_sz = it->second.length();
-  *pvalue = buf;
-
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  std::mutex m;
+  std::condition_variable cv;
+  bool finished = false;
+  fhand->table->Get(key, key_sz,
+                    [&](const char* val, size_t size) {
+                      char* buf = static_cast<char*>(malloc(size));
+                      std::memcpy(buf, val, size);
+                      *pvalue = buf;
+                      *pvalue_sz = size;
+                      std::lock_guard<std::mutex> lk{m};
+                      finished = true;
+                      cv.notify_one();
+                    });
+  std::unique_lock<std::mutex> lk{m};
+  cv.wait(lk, [&]{return finished;});
   return 0;
 }
 
@@ -126,8 +162,11 @@ fox_sync_set(fox_ptr fhand, unsigned delta,
              const char* key, size_t key_sz,
              const char* value, size_t value_sz)
 {
-  //FIXME: no semaphore stuff
-  return fox_set(fhand, key, key_sz, value, value_sz);
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  fhand->table->SyncSet(key, key_sz,
+                        value, value_sz,
+                        delta);
+  return 0;
 }
 
 extern "C"
@@ -136,8 +175,23 @@ fox_sync_get(fox_ptr fhand, unsigned delta,
              const char *key, size_t key_sz,
              char **pvalue, size_t *pvalue_sz)
 {
-  //FIXME: no semaphore stuff
-  return fox_get(fhand, key, key_sz, pvalue, pvalue_sz);
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  std::mutex m;
+  std::condition_variable cv;
+  bool finished = false;
+  fhand->table->SyncGet(key, key_sz,
+                        delta, [&](const char* val, size_t size) {
+                          char* buf = static_cast<char*>(malloc(size));
+                          std::memcpy(buf, val, size);
+                          *pvalue = buf;
+                          *pvalue_sz = size;
+                          std::lock_guard<std::mutex> lk{m};
+                          finished = true;
+                          cv.notify_one();
+                        });
+  std::unique_lock<std::mutex> lk{m};
+  cv.wait(lk, [&]{return finished;});
+  return 0;
 }
 
 extern "C"
@@ -146,8 +200,8 @@ fox_broad_set(fox_ptr fhand,
               const char *key, size_t key_sz,
               const char *value, size_t value_sz)
 {
-  //FIXME: no broadcast stuff
-  return fox_set(fhand, key, key_sz, value, value_sz);
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  return fox_sync_set(fhand, 1, key, key_sz, value, value_sz);
 }
 
 extern "C"
@@ -156,8 +210,8 @@ fox_broad_get(fox_ptr fhand,
               const char *key, size_t key_sz,
               char **pvalue, size_t *pvalue_sz)
 {
-  //FIXME: no broadcast stuff
-  return fox_get(fhand, key, key_sz, pvalue, pvalue_sz);
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  return fox_sync_get(fhand, 1, key, key_sz, pvalue, pvalue_sz);
 }
 
 extern "C"
@@ -166,9 +220,29 @@ fox_queue_set(fox_ptr fhand,
               const char *key, size_t key_sz,
               const char *value, size_t value_sz)
 {
-  fhand->queue.emplace(std::piecewise_construct,
-                       std::forward_as_tuple(key, key_sz),
-                       std::forward_as_tuple(value, value_sz));
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  std::string str{key, key_sz};
+  str += "_B";
+  std::mutex m;
+  std::condition_variable cv;
+  bool finished = false;
+  uint32_t qidx;
+  fhand->table->Increment(str.c_str(), str.length(),
+                          [&](uint32_t val) {
+                            qidx = val;
+                            std::lock_guard<std::mutex> lk{m};
+                            finished = true;
+                            cv.notify_one();
+                        });
+  {
+    std::unique_lock<std::mutex> lk{m};
+    cv.wait(lk, [&]{return finished;});
+  }
+
+  std::string str2{key, key_sz};
+  str2 += std::to_string(qidx);
+  fox_sync_set(fhand, 1, str2.c_str(), str2.length(), value, value_sz);
+
   return 0;
 }
 
@@ -178,17 +252,28 @@ fox_queue_get(fox_ptr fhand,
               const char *key, size_t key_sz,
               char **pvalue, size_t *pvalue_sz)
 {
-  auto it = fhand->queue.find(std::string(key, key_sz));
-  if (it == fhand->queue.end()) {
-    return -1;
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  std::string str{key, key_sz};
+  str += "_F";
+  std::mutex m;
+  std::condition_variable cv;
+  bool finished = false;
+  uint32_t qidx;
+  fhand->table->Increment(str.c_str(), str.length(),
+                          [&](uint32_t val) {
+                            qidx = val;
+                            std::lock_guard<std::mutex> lk{m};
+                            finished = true;
+                            cv.notify_one();
+                          });
+  {
+    std::unique_lock<std::mutex> lk{m};
+    cv.wait(lk, [&]{return finished;});
   }
 
-  char* buf = static_cast<char*>(malloc(it->second.length()));
-  std::strncpy(buf, it->second.c_str(), it->second.length());
-  *pvalue = buf;
-  *pvalue_sz = it->second.length();
-
-  fhand->queue.erase(it);
+  std::string str2{key, key_sz};
+  str2 += std::to_string(qidx);
+  fox_sync_get(fhand, 1, str2.c_str(), str2.length(), pvalue, pvalue_sz);
 
   return 0;
 }
@@ -199,7 +284,16 @@ fox_broad_queue_set(fox_ptr fhand,
                     const char *key, size_t key_sz,
                     const char *value, size_t value_sz)
 {
-  return fox_queue_set(fhand, key, key_sz, value, value_sz);
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  std::string str {key, key_sz};
+
+  for (int idx = 0; idx < fhand->nprocs; ++idx) {
+    auto newkey = str;
+    newkey += std::to_string(idx);
+    fox_queue_set(fhand, newkey.c_str(), newkey.length(),
+                  value, value_sz);
+  }
+  return 0;
 }
 
 extern "C"
@@ -208,7 +302,15 @@ fox_dist_queue_set(fox_ptr fhand,
                    const char *key, size_t key_sz,
                    const char *value, size_t value_sz)
 {
-  return fox_queue_set(fhand, key, key_sz, value, value_sz);
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  static int oproc = 0;
+
+  std::string str{key, key_sz};
+  str += std::to_string((fhand->procid + oproc) % fhand->nprocs);
+  fox_queue_set(fhand, str.c_str(), str.length(), value, value_sz);
+
+  oproc = (oproc + 1) % fhand->nprocs;
+  return 0;
 }
 
 extern "C"
@@ -217,7 +319,12 @@ fox_dist_queue_get(fox_ptr fhand,
                    const char *key, size_t key_sz,
                    char **pvalue, size_t *pvalue_sz)
 {
-  return fox_queue_get(fhand, key, key_sz, pvalue, pvalue_sz);
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  std::string str{key, key_sz};
+
+  str += std::to_string(fhand->procid);
+
+  return fox_queue_get(fhand, str.c_str(), str.length(), pvalue, pvalue_sz);
 }
 
 extern "C"
@@ -226,7 +333,12 @@ fox_reduce_set(fox_ptr fhand,
                const char *key, size_t key_sz,
                const char *value, size_t value_sz)
 {
-  return fox_set(fhand, key, key_sz, value, value_sz);
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  std::string str{key, key_sz};
+
+  str += std::to_string(fhand->procid);
+
+  return fox_sync_set(fhand, 1, str.c_str(), str.length(), value, value_sz);
 }
 
 extern "C"
@@ -236,15 +348,18 @@ fox_reduce_get(fox_ptr fhand,
                char *pvalue, size_t pvalue_sz,
                void (*reduce)(void *out, void *in))
 {
-  char* tmpvalue;
-  size_t tmpvalue_sz;
-  int ret = fox_get(fhand, key, key_sz, &tmpvalue, &tmpvalue_sz);
-  if (ret != 0) {
-    return ret;
-  }
+  std::cerr << fhand->procid << ": " << __func__ << std::endl;
+  for (int idx = 0; idx < fhand->nprocs; ++idx) {
+    std::string str{key, key_sz};
+    str += std::to_string(idx);
 
-  (*reduce)(pvalue, tmpvalue);
-  free(tmpvalue);
+    char* data_ptr;
+    size_t data_sz;
+    fox_sync_get(fhand, 1, str.c_str(), str.length(), &data_ptr, &data_sz);
+
+    reduce(pvalue, data_ptr);
+    free(data_ptr);
+  }
 
   return 0;
 }
@@ -255,5 +370,6 @@ fox_collect(fox_ptr fhand,
             const char *key, size_t key_sz,
             int root, int opt)
 {
+  assert(0);
   return 0;
 }

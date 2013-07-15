@@ -29,7 +29,26 @@ namespace ebbrt {
                      size_t key_size,
                      std::function<void(const char*, size_t)> func,
                      std::function<void()> sent = nullptr) = 0;
-    // virtual void Set(std::string key, std::string val) = 0;
+    virtual void Set(const char* key,
+                     size_t key_size,
+                     const char* val,
+                     size_t val_size,
+                     std::function<void()> sent = nullptr) = 0;
+    virtual void SyncGet(const char* key,
+                         size_t key_size,
+                         uint32_t waitfor,
+                         std::function<void(const char*, size_t)> func,
+                         std::function<void()> sent = nullptr) = 0;
+    virtual void SyncSet(const char* key,
+                         size_t key_size,
+                         const char* val,
+                         size_t val_size,
+                         uint32_t delta,
+                         std::function<void()> sent = nullptr) = 0;
+    virtual void Increment(const char* key,
+                           size_t key_size,
+                           std::function<void(uint32_t)> func,
+                           std::function<void()> sent = nullptr) = 0;
   };
   const EbbRef<HashTable> hashtable =
     EbbRef<HashTable>(lrt::trans::find_static_ebb_id("HashTable"));

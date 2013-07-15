@@ -66,6 +66,7 @@ ebbrt::MPIMessageManager::Send(NetworkId to,
     throw std::runtime_error("MPI_Send failed");
   }
 
+  delete[] aggregate;
   //FIXME: do this asynchronously
   cb();
 }
@@ -87,17 +88,23 @@ ebbrt::MPIMessageManager::StartListening()
 int
 ebbrt::MPIMessageManager::CheckForInterrupt()
 {
-  int flag;
-  if (MPI_Iprobe(MPI_ANY_SOURCE, MESSAGE_MANAGER_TAG, MPI_COMM_WORLD,
-                 &flag, &status_) != MPI_SUCCESS) {
+  // int flag;
+  // if (MPI_Iprobe(MPI_ANY_SOURCE, MESSAGE_MANAGER_TAG, MPI_COMM_WORLD,
+  //                &flag, &status_) != MPI_SUCCESS) {
+  //   throw std::runtime_error("Iprobe failed");
+  // }
+
+  // if (flag) {
+  //   std::cerr << "got message" << std::endl;
+  //   return interrupt_;
+  // } else {
+  //   return -1;
+  // }
+  if (MPI_Probe(MPI_ANY_SOURCE, MESSAGE_MANAGER_TAG, MPI_COMM_WORLD,
+                &status_) != MPI_SUCCESS) {
     throw std::runtime_error("Iprobe failed");
   }
-
-  if (flag) {
-    return interrupt_;
-  } else {
-    return -1;
-  }
+  return interrupt_;
 }
 
 void
@@ -121,5 +128,5 @@ ebbrt::MPIMessageManager::DispatchMessage()
   ebb->HandleMessage(from,
                      buf + sizeof(MessageHeader),
                      len - sizeof(MessageHeader));
-  delete buf;
+  delete[] buf;
 }

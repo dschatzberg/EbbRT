@@ -18,20 +18,39 @@
 
 #include "app/app.hpp"
 #include "ebb/EbbManager/PrimitiveEbbManager.hpp"
+#include "ebb/EventManager/SimpleEventManager.hpp"
+#include "ebb/MessageManager/MPIMessageManager.hpp"
+#include "ebb/HashTable/DistributedHashTable.hpp"
 
-constexpr ebbrt::app::Config::InitEbb init_ebbs[] = {
+constexpr ebbrt::app::Config::InitEbb init_ebbs[] =
   {
-    .create_root = ebbrt::PrimitiveEbbManagerConstructRoot,
-    .name = "EbbManager"
-  }
-};
+    {
+      .create_root = ebbrt::PrimitiveEbbManagerConstructRoot,
+      .name = "EbbManager"
+    },
+    {
+      .create_root = ebbrt::SimpleEventManager::ConstructRoot,
+      .name = "EventManager"
+    },
+    {
+      .create_root = ebbrt::DistributedHashTable::ConstructRoot,
+      .name = "HashTable"
+    },
+    {
+      .create_root = ebbrt::MPIMessageManager::ConstructRoot,
+      .name = "MessageManager"
+    }
+  };
 
 constexpr ebbrt::app::Config::StaticEbbId static_ebbs[] = {
   {.name = "EbbManager", .id = 2},
+  {.name = "EventManager", .id = 5},
+  {.name = "HashTable", .id = 6},
+  {.name = "MessageManager", .id = 7}
 };
 
 const ebbrt::app::Config ebbrt::app::config = {
-  .space_id = 0,
+  .space_id = 1,
   .num_init = sizeof(init_ebbs) / sizeof(Config::InitEbb),
   .init_ebbs = init_ebbs,
   .num_statics = sizeof(static_ebbs) / sizeof(Config::StaticEbbId),

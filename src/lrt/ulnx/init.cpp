@@ -104,6 +104,7 @@ ebbrt::Context::Loop(int count)
     while (1) {
       // Workaround for CNK bug
       if (fds_.size() != 0) {
+        std::cerr << "calling poll" << std::endl;
         int ret = poll(fds_.data(), fds_.size(), 0);
         if (ret == -1) {
           if (errno == EINTR) {
@@ -119,9 +120,9 @@ ebbrt::Context::Loop(int count)
         }
       }
       //call functions
-      std::vector<std::function<int()> > funcs_copy = funcs_;
+      //std::vector<std::function<int()> > funcs_copy = funcs_;
       bool didevent = false;
-      for (const auto& func: funcs_copy) {
+      for (const auto& func: funcs_) {
         int interrupt = func();
         if (interrupt >= 0) {
           didevent = true;

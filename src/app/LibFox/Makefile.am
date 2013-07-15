@@ -43,7 +43,10 @@ src_app_LibFox_libtfox_a_SOURCES = \
 src_app_LibFox_libtfox_a_CFLAGS = -DUSE_MPI
 
 src_app_LibFox_mcphoton_ebbs = \
-	src/ebb/EbbManager/libPrimitiveEbbManager.a
+	src/ebb/EbbManager/libPrimitiveEbbManager.a \
+	src/ebb/EventManager/libSimpleEventManager.a \
+	src/ebb/MessageManager/libMPIMessageManager.a \
+	src/ebb/HashTable/libDistributedHashTable.a
 
 src_app_LibFox_mcphoton_LDFLAGS = \
 	$(app_linkflags) \
@@ -67,7 +70,10 @@ src_app_LibFox_mcphoton_LDFLAGS += \
 	-pthread
 
 src_app_LibFox_tfox_ebbs = \
-	src/ebb/EbbManager/libPrimitiveEbbManager.a
+	src/ebb/EbbManager/libPrimitiveEbbManager.a \
+	src/ebb/EventManager/libSimpleEventManager.a \
+	src/ebb/MessageManager/libMPIMessageManager.a \
+	src/ebb/HashTable/libDistributedHashTable.a
 
 src_app_LibFox_tfox_LDFLAGS = \
 	$(app_linkflags) \

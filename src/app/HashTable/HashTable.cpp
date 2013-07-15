@@ -82,6 +82,9 @@ int main(int argc, char** argv)
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
   if (rank == 0) {
+    ebbrt::hashtable->Set("foo", strlen("foo") + 1,
+                          "bar", strlen("bar") + 1);
+
     ebbrt::hashtable->Get("foo", strlen("foo") + 1,
                           [](const char* val, size_t val_size) {
                             if (val == nullptr) {
@@ -90,6 +93,24 @@ int main(int argc, char** argv)
                               std::cout << "Value found: " << val << std::endl;
                             }
                           });
+    ebbrt::hashtable->SyncGet("asdf", strlen("asdf") + 1, 2,
+                              [](const char* val, size_t val_size) {
+                                std::cout << "Value found: " << val << std::endl;
+                              });
+    ebbrt::hashtable->Increment("foofoo", strlen("foofoo") + 1,
+                                [](uint32_t val) {
+                                  std::cout << "Got value: " << val << std::endl;
+                                });
+  }
+
+  if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS) {
+    std::cerr << "MPI_Barrier failed" << std::endl;
+    return -1;
+  }
+
+  if (rank == 1 || rank == 2) {
+    ebbrt::hashtable->SyncSet("asdf", strlen("asdf") + 1,
+                              "fdsa", strlen("fdsa") + 1, 1);
   }
 
   context.Loop(-1);

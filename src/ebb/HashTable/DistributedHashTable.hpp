@@ -25,19 +25,60 @@
 
 namespace ebbrt {
   class DistributedHashTable : public HashTable {
-    public:
-      typedef int id_t;
-      DistributedHashTable();
-      static EbbRoot* ConstructRoot();
-      virtual mapped_t Get(key_t key) override;
-      virtual int Init(id_t myid, unsigned int nodecount);
-      virtual int Set(key_t key, mapped_t val) override;
-    private:
-      inline id_t home( hash_t h ) { return  h % nodecount_; }
-      inline bool local( id_t i ) { return i == myid_; }
-      id_t myid_; 
-      unsigned int nodecount_; 
-      std::unordered_map<key_t, mapped_t> table_;
+  public:
+    static EbbRoot* ConstructRoot();
+
+    DistributedHashTable();
+
+    virtual void Get(const char* key,
+                     size_t key_size,
+                     std::function<void(const char*, size_t)> func,
+                     std::function<void()> sent = nullptr) override;
+    // virtual void Set(std::string key, std::string val) override;
+    virtual void HandleMessage(NetworkId from, const char* buf,
+                               size_t len) override;
+  private:
+    enum DHTOp {
+      //      SET,
+      GET_REQUEST,
+      GET_RESPONSE
+    } type;
+
+    struct GetRequest {
+      DHTOp op;
+      unsigned op_id;
+    };
+
+    struct GetResponse {
+      DHTOp op;
+      unsigned op_id;
+    };
+
+    void HandleGetRequest(NetworkId from, const GetRequest& req,
+                          const char* key, size_t len);
+    void HandleGetResponse(const GetResponse& resp,
+                           const char* val, size_t len);
+    inline NetworkId home(size_t h )
+    {
+      NetworkId id;
+      //FIXME: MPI specific
+      id.rank = h % nodecount_;
+      return id;
+    }
+
+    inline bool local(NetworkId i )
+    {
+      //FIXME: MPI specific
+      return i.rank == myid_.rank;
+    }
+
+    NetworkId myid_;
+    unsigned int nodecount_;
+    std::unordered_map<std::string, std::string> table_;
+    std::atomic_uint op_id_;
+    Spinlock lock_;
+    std::unordered_map<unsigned,
+                       std::function<void(const char*, size_t)> > cb_map_;
   };
 }
 #endif

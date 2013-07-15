@@ -13,13 +13,29 @@
 
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-app_sources = \
-	src/app/app.hpp
+EXTRA_PROGRAMS += src/app/HashTable/HashTable
 
-EXTRA_PROGRAMS =
+src_app_HashTable_HashTable_SOURCES = \
+	src/app/HashTable/HashTable.cpp
 
-include src/app/HashTable/Makefile.am
-include src/app/HelloEbb/Makefile.am
-include src/app/HelloRemote/Makefile.am
-include src/app/HelloWorld/Makefile.am
-include src/app/LibFox/Makefile.am
+src_app_HashTable_HashTable_ebbs = \
+	src/ebb/EbbManager/libPrimitiveEbbManager.a \
+	src/ebb/EventManager/libSimpleEventManager.a \
+	src/ebb/MessageManager/libMPIMessageManager.a \
+	src/ebb/HashTable/libDistributedHashTable.a
+
+src_app_HashTable_HashTable_LDFLAGS = \
+	$(app_linkflags) \
+	-Wl,-whole-archive \
+	$(ebbrt_libs) \
+	$(src_app_HashTable_HashTable_ebbs) \
+	-Wl,-no-whole-archive
+
+src_app_HashTable_HashTable_LDADD = \
+	libebbrt.a
+
+src_app_HashTable_HashTable_DEPENDENCIES = \
+	libebbrt.a \
+	$(app_deps) \
+	$(ebbrt_libs) \
+	$(src_app_HashTable_HashTable_ebbs)

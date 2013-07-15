@@ -24,12 +24,14 @@
 
 namespace ebbrt {
   class HashTable : public EbbRep {
-    public:
-      typedef std::string key_t;
-      typedef std::string mapped_t;
-      typedef size_t hash_t;
-      virtual mapped_t Get(key_t key) = 0;
-      virtual int Set(key_t key, mapped_t val) = 0;
+  public:
+    virtual void Get(const char* key,
+                     size_t key_size,
+                     std::function<void(const char*, size_t)> func,
+                     std::function<void()> sent = nullptr) = 0;
+    // virtual void Set(std::string key, std::string val) = 0;
   };
+  const EbbRef<HashTable> hashtable =
+    EbbRef<HashTable>(lrt::trans::find_static_ebb_id("HashTable"));
 }
 #endif

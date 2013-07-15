@@ -16,11 +16,13 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <cassert>
 #include <cstdlib>
 #include <cstring>
 
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 extern "C" {

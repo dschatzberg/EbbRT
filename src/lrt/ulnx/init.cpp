@@ -119,7 +119,7 @@ ebbrt::Context::Loop(int count)
         }
       }
       //call functions
-      std::vector<std::function<int()> > funcs_copy{funcs_};
+      std::vector<std::function<int()> > funcs_copy = funcs_;
       bool didevent = false;
       for (const auto& func: funcs_copy) {
         int interrupt = func();

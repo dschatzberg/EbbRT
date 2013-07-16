@@ -79,7 +79,6 @@ ebbrt::DistributedHashTable::Get(const char* key,
     lock_.Lock();
     cb_map_[op_id] = cb;
     lock_.Unlock();
-    std::cout << myid_.rank << ": Sending GET to " << location.rank << std::endl;
     message_manager->Send(location, hashtable, std::move(list),
                           [=]() {
                             delete header;
@@ -117,8 +116,6 @@ ebbrt::DistributedHashTable::Set(const char* key,
       std::pair<const void*, size_t>(key, key_size),
       std::pair<const void*, size_t>(val, val_size)
     };
-
-    std::cerr << "Sending a Set message to " << location.rank << std::endl;
 
     message_manager->Send(location, hashtable, std::move(list),
                           [=]() {
@@ -180,7 +177,6 @@ ebbrt::DistributedHashTable::SyncGet(const char* key,
     lock_.Lock();
     cb_map_[op_id] = cb;
     lock_.Unlock();
-    std::cout << myid_.rank << ": Sending SYNC GET to " << location.rank << std::endl;
     message_manager->Send(location, hashtable, std::move(list),
                           [=]() {
                             delete header;
@@ -221,7 +217,6 @@ ebbrt::DistributedHashTable::SyncSet(const char* key,
         };
         NetworkId to;
         to.rank = it->second.first;
-        std::cout << myid_.rank << ": Sending GET response to " << to.rank << std::endl;
         message_manager->Send(to, hashtable, std::move(list),
                               [=]() {
                                 delete header;
@@ -257,7 +252,6 @@ ebbrt::DistributedHashTable::SyncSet(const char* key,
       std::pair<const void*, size_t>(val, val_size)
     };
 
-    std::cout << myid_.rank << ": Sending SYNC SET to " << location.rank << std::endl;
     message_manager->Send(location, hashtable, std::move(list),
                           [=]() {
                             delete header;
@@ -296,7 +290,6 @@ ebbrt::DistributedHashTable::Increment(const char* key,
     lock_.Lock();
     inc_cb_map_[op_id] = func;
     lock_.Unlock();
-    std::cout << myid_.rank << ": Sending INCREMENT to " << location.rank << std::endl;
     message_manager->Send(location, hashtable, std::move(list),
                           [=]() {
                             delete header;
@@ -361,13 +354,11 @@ ebbrt::DistributedHashTable::HandleGetRequest(NetworkId from,
                                               const GetRequest& req,
                                               const char* key, size_t len)
 {
-  std::cout << myid_.rank << ": Got GET request from " << from.rank << std::endl;
   lock_.Lock();
   auto it = table_.find(std::string(key, len));
   auto header = new GetResponse;
   header->op = GET_RESPONSE;
   header->op_id = req.op_id;
-  std::cout << myid_.rank << ": Sending GET response to " << from.rank << std::endl;
   if (it == table_.end()) {
     lock_.Unlock();
     BufferList list = {
@@ -397,7 +388,6 @@ void
 ebbrt::DistributedHashTable::HandleGetResponse(const GetResponse& resp,
                                                const char* val, size_t len)
 {
-  std::cout << myid_.rank << ": Got GET Response" << std::endl;
   lock_.Lock();
   auto it = cb_map_.find(resp.op_id);
   assert(it != cb_map_.end());
@@ -415,7 +405,6 @@ void
 ebbrt::DistributedHashTable::HandleSetRequest(const SetRequest& req,
                                               const char* buf, size_t len)
 {
-  std::cout << myid_.rank << ": Got SET Request" << std::endl;
   assert(local(home(table_.hash_function()(std::string(buf, req.key_size)))));
   lock_.Lock();
   table_[std::string(buf, req.key_size)] = std::string(buf + req.key_size,
@@ -428,8 +417,6 @@ ebbrt::DistributedHashTable::HandleSyncGetRequest(NetworkId from,
                                                   const SyncGetRequest& req,
                                                   const char* key, size_t len)
 {
-  std::cout << myid_.rank << ": Got Sync GET request from " << from.rank <<
-    std::endl;
   assert(local(home(table_.hash_function()(std::string(key, len)))));
   lock_.Lock();
   auto& sync_ent = sync_table_[std::string(key, len)];
@@ -442,7 +429,6 @@ ebbrt::DistributedHashTable::HandleSyncGetRequest(NetworkId from,
     auto header = new GetResponse;
     header->op = GET_RESPONSE;
     header->op_id = req.op_id;
-    std::cout << myid_.rank << ": Sending SYNC GET response to " << from.rank << std::endl;
     if (it == table_.end()) {
       lock_.Unlock();
       BufferList list = {
@@ -473,7 +459,6 @@ void
 ebbrt::DistributedHashTable::HandleSyncSetRequest(const SyncSetRequest& req,
                                                   const char* buf, size_t len)
 {
-  std::cout << myid_.rank << ": Got Sync SET Request" << std::endl;
   assert(local(home(table_.hash_function()(std::string(buf, req.key_size)))));
 
   lock_.Lock();
@@ -499,7 +484,7 @@ ebbrt::DistributedHashTable::HandleSyncSetRequest(const SyncSetRequest& req,
       };
       NetworkId to;
       to.rank = it->second.first;
-      std::cout << myid_.rank << ": Sending SYNC GET response to " << to.rank << std::endl;
+
       message_manager->Send(to, hashtable, std::move(list),
                             [=]() {
                               delete val;
@@ -525,7 +510,6 @@ ebbrt::DistributedHashTable::HandleIncrementRequest(NetworkId from,
                                                     const char* key,
                                                     size_t len)
 {
-  std::cout << myid_.rank << ": Got INCREMENT request from " << from.rank << std::endl;
   lock_.Lock();
   auto val = val_table_[std::string(key, len)]++;
   lock_.Unlock();
@@ -538,7 +522,7 @@ ebbrt::DistributedHashTable::HandleIncrementRequest(NetworkId from,
   BufferList list = {
     std::pair<const void*, size_t>(header, sizeof(IncrementResponse))
   };
-  std::cout << myid_.rank << ": Sending INCREMENT response to " << from.rank << std::endl;
+
   message_manager->Send(from, hashtable, std::move(list),
                         [=]() {
                           delete header;
@@ -549,7 +533,6 @@ ebbrt::DistributedHashTable::HandleIncrementRequest(NetworkId from,
 void
 ebbrt::DistributedHashTable::HandleIncrementResponse(const IncrementResponse& resp)
 {
-  std::cout << myid_.rank << ": Got INCREMENT response" << std::endl;
   lock_.Lock();
   auto it = inc_cb_map_.find(resp.op_id);
   assert(it != inc_cb_map_.end());

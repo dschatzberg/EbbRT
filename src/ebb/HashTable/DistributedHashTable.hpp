@@ -19,7 +19,10 @@
 #define EBBRT_EBB_HASHTABLE_DISTRIBUTEDHASHTABLE_HPP
 
 #include <functional>
+#include <map>
+#include <string>
 #include <unordered_map>
+
 #include "ebb/ebb.hpp"
 #include "ebb/HashTable/HashTable.hpp"
 

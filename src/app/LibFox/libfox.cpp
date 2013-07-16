@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <iostream>
 #include <map>
 #include <string>
 #include <thread>
@@ -117,7 +118,6 @@ fox_set(fox_ptr fhand,
         const char *key, size_t key_sz,
         const char *value, size_t value_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   fhand->table->Set(key, key_sz,
                     value, value_sz);
   return 0;
@@ -129,7 +129,6 @@ fox_get(fox_ptr fhand,
         const char *key, size_t key_sz,
         char **pvalue, size_t *pvalue_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   std::mutex m;
   std::condition_variable cv;
   bool finished = false;
@@ -162,7 +161,6 @@ fox_sync_set(fox_ptr fhand, unsigned delta,
              const char* key, size_t key_sz,
              const char* value, size_t value_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   fhand->table->SyncSet(key, key_sz,
                         value, value_sz,
                         delta);
@@ -175,7 +173,6 @@ fox_sync_get(fox_ptr fhand, unsigned delta,
              const char *key, size_t key_sz,
              char **pvalue, size_t *pvalue_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   std::mutex m;
   std::condition_variable cv;
   bool finished = false;
@@ -200,7 +197,6 @@ fox_broad_set(fox_ptr fhand,
               const char *key, size_t key_sz,
               const char *value, size_t value_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   return fox_sync_set(fhand, 1, key, key_sz, value, value_sz);
 }
 
@@ -210,7 +206,6 @@ fox_broad_get(fox_ptr fhand,
               const char *key, size_t key_sz,
               char **pvalue, size_t *pvalue_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   return fox_sync_get(fhand, 1, key, key_sz, pvalue, pvalue_sz);
 }
 
@@ -220,7 +215,6 @@ fox_queue_set(fox_ptr fhand,
               const char *key, size_t key_sz,
               const char *value, size_t value_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   std::string str{key, key_sz};
   str += "_B";
   std::mutex m;
@@ -252,7 +246,6 @@ fox_queue_get(fox_ptr fhand,
               const char *key, size_t key_sz,
               char **pvalue, size_t *pvalue_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   std::string str{key, key_sz};
   str += "_F";
   std::mutex m;
@@ -284,7 +277,6 @@ fox_broad_queue_set(fox_ptr fhand,
                     const char *key, size_t key_sz,
                     const char *value, size_t value_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   std::string str {key, key_sz};
 
   for (int idx = 0; idx < fhand->nprocs; ++idx) {
@@ -302,7 +294,6 @@ fox_dist_queue_set(fox_ptr fhand,
                    const char *key, size_t key_sz,
                    const char *value, size_t value_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   static int oproc = 0;
 
   std::string str{key, key_sz};
@@ -319,7 +310,6 @@ fox_dist_queue_get(fox_ptr fhand,
                    const char *key, size_t key_sz,
                    char **pvalue, size_t *pvalue_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   std::string str{key, key_sz};
 
   str += std::to_string(fhand->procid);
@@ -333,7 +323,6 @@ fox_reduce_set(fox_ptr fhand,
                const char *key, size_t key_sz,
                const char *value, size_t value_sz)
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   std::string str{key, key_sz};
 
   str += std::to_string(fhand->procid);
@@ -348,7 +337,6 @@ fox_reduce_get(fox_ptr fhand,
                char *pvalue, size_t pvalue_sz,
                void (*reduce)(void *out, void *in))
 {
-  std::cerr << fhand->procid << ": " << __func__ << std::endl;
   for (int idx = 0; idx < fhand->nprocs; ++idx) {
     std::string str{key, key_sz};
     str += std::to_string(idx);

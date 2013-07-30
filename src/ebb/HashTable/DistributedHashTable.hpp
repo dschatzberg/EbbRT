@@ -130,6 +130,7 @@ namespace ebbrt {
       NetworkId id;
       //FIXME: MPI specific
       id.rank = h % nodecount_;
+      id.context = 1;
       return id;
     }
 
@@ -146,7 +147,8 @@ namespace ebbrt {
     std::unordered_map<std::string,
                        std::pair<uint32_t,
                                  std::multimap<uint32_t,
-                                               std::pair<int, unsigned> > > >
+                                               std::pair<NetworkId,
+                                                         unsigned> > > >
                        sync_table_;
     std::atomic_uint op_id_;
     Spinlock lock_;

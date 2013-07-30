@@ -24,7 +24,7 @@ $Log: $
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
-#define dbprintf(...) //{fprintf(stderr, __VA_ARGS__);}
+#define dbprintf(...) {fprintf(stderr, __VA_ARGS__);}
 
 #define DEFAULT_NPROC 1
 #define DEFAULT_PROCID 0
@@ -181,7 +181,9 @@ main(int argc, char *argv[])
 	memset(start, 0, sizeof(start));
 	memset(finish, 0, sizeof(finish));
 
+        dbprintf("fox_new\n");
 	fox_new(&fhand, nprocs, procid);
+        dbprintf("fox_new_complete\n");
 	for (hptr = hosts; hptr != NULL; hptr = hptr->next) {
 		if (flags & VFLAG) fprintf(stderr, "%s\n", hptr->obj);
 		fox_server_add(fhand, hptr->obj);
@@ -189,267 +191,268 @@ main(int argc, char *argv[])
 
 /* Use key-value server so that it is initialized (internal structures setup)
    and doesn't delay subsequent timed sections */
-#define init_sz 4096
-	BARRIER(A)
-	dbprintf("fox_queue_set (init)\n");
-	for (i = 4; i <= init_sz; i+=i) {
-		size_t buf_sz = i;
-		char *buf_ptr = (char *)malloc(buf_sz);
-		char key[MAX_KEY];
-		memset(buf_ptr, 0xFF, buf_sz);
-		sprintf(key, "QI:%d", procid);
-		ret = fox_queue_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz);
-		if (ret != 0) {
-			fprintf(stderr, " -- error: fox_queue_set(%s) = %d\n", key, ret);
-			exit(EXIT_FAILURE);
-		}
-		free(buf_ptr);
-	}
+/* #define init_sz 4096 */
+/* 	BARRIER(A) */
+/* 	dbprintf("fox_queue_set (init)\n"); */
+/* 	for (i = 4; i <= init_sz; i+=i) { */
+/* 		size_t buf_sz = i; */
+/* 		char *buf_ptr = (char *)malloc(buf_sz); */
+/* 		char key[MAX_KEY]; */
+/* 		memset(buf_ptr, 0xFF, buf_sz); */
+/* 		sprintf(key, "QI:%d", procid); */
+/* 		ret = fox_queue_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz); */
+/* 		if (ret != 0) { */
+/* 			fprintf(stderr, " -- error: fox_queue_set(%s) = %d\n", key, ret); */
+/* 			exit(EXIT_FAILURE); */
+/* 		} */
+/* 		free(buf_ptr); */
+/* 	} */
 
-	BARRIER(B)
-	dbprintf("fox_queue_get (init)\n");
-	for (i = 4; i <= init_sz; i+=i) {
-		size_t buf_sz;
-		char *buf_ptr;
-		char key[MAX_KEY];
-		sprintf(key, "QI:%d", procid);
-		ret = fox_queue_get(fhand, key, strlen(key), (char **)&buf_ptr, &buf_sz);
-		if (ret != 0 || buf_sz != i) {
-			fprintf(stderr, " -- error: fox_queue_get(%s) = %d\n", key, ret);
-			exit(EXIT_FAILURE);
-		}
-		free(buf_ptr);
-	}
-	FLUSH
+/*         dbprintf("fox_queue_set (init) complete\n") */
+/* 	BARRIER(B) */
+/* 	dbprintf("fox_queue_get (init)\n"); */
+/* 	for (i = 4; i <= init_sz; i+=i) { */
+/* 		size_t buf_sz; */
+/* 		char *buf_ptr; */
+/* 		char key[MAX_KEY]; */
+/* 		sprintf(key, "QI:%d", procid); */
+/* 		ret = fox_queue_get(fhand, key, strlen(key), (char **)&buf_ptr, &buf_sz); */
+/* 		if (ret != 0 || buf_sz != i) { */
+/* 			fprintf(stderr, " -- error: fox_queue_get(%s) = %d\n", key, ret); */
+/* 			exit(EXIT_FAILURE); */
+/* 		} */
+/* 		free(buf_ptr); */
+/* 	} */
+/* 	FLUSH */
 
 /* * * * * * * * * * Timed Sections * * * * * * * * * */
 
 /* * * * * * * * * * fundamental set & get * * * * * * * * * */
 
-#define fund_sz 4
-	BARRIER(A)
-	dbprintf("fox_set\n");
-	section[s_fox_set] = "fox_set";
-	{
-		size_t buf_sz = fund_sz;
-		char *buf_ptr = (char *)malloc(buf_sz);
-		memset(buf_ptr, 0xFF, buf_sz);
-		tget(start[s_fox_set]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "F:%d:%d", procid, i);
-			ret = fox_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz);
-			if (ret != 0) {
-				fprintf(stderr, " -- error: fox_set(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-		}
-		tget(finish[s_fox_set]);
-		free(buf_ptr);
-	}
+/* #define fund_sz 4 */
+/* 	BARRIER(A) */
+/* 	dbprintf("fox_set\n"); */
+/* 	section[s_fox_set] = "fox_set"; */
+/* 	{ */
+/* 		size_t buf_sz = fund_sz; */
+/* 		char *buf_ptr = (char *)malloc(buf_sz); */
+/* 		memset(buf_ptr, 0xFF, buf_sz); */
+/* 		tget(start[s_fox_set]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "F:%d:%d", procid, i); */
+/* 			ret = fox_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz); */
+/* 			if (ret != 0) { */
+/* 				fprintf(stderr, " -- error: fox_set(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 		} */
+/* 		tget(finish[s_fox_set]); */
+/* 		free(buf_ptr); */
+/* 	} */
 
-	BARRIER(B)
-	dbprintf("fox_get\n");
-	section[s_fox_get] = "fox_get";
-	{
-		size_t buf_sz;
-		char *buf_ptr;
-		tget(start[s_fox_get]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "F:%d:%d", procid, i);
-			ret = fox_get(fhand, key, strlen(key), (char **)&buf_ptr, &buf_sz);
-			if (ret != 0 || buf_sz != fund_sz) {
-				fprintf(stderr, " -- error: fox_get(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-			free(buf_ptr);
-		}
-		tget(finish[s_fox_get]);
-	}
-	FLUSH
+/* 	BARRIER(B) */
+/* 	dbprintf("fox_get\n"); */
+/* 	section[s_fox_get] = "fox_get"; */
+/* 	{ */
+/* 		size_t buf_sz; */
+/* 		char *buf_ptr; */
+/* 		tget(start[s_fox_get]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "F:%d:%d", procid, i); */
+/* 			ret = fox_get(fhand, key, strlen(key), (char **)&buf_ptr, &buf_sz); */
+/* 			if (ret != 0 || buf_sz != fund_sz) { */
+/* 				fprintf(stderr, " -- error: fox_get(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 			free(buf_ptr); */
+/* 		} */
+/* 		tget(finish[s_fox_get]); */
+/* 	} */
+/* 	FLUSH */
 
-/* * * * * * * * * * synchronization * * * * * * * * * */
+/* /\* * * * * * * * * * synchronization * * * * * * * * * *\/ */
 
-#define sync_sz 4
-	BARRIER(A)
-	dbprintf("fox_sync_set\n");
-	section[s_fox_sync_set] = "fox_sync_set";
-	{
-		size_t buf_sz = sync_sz;
-		char *buf_ptr = (char *)malloc(buf_sz);
-		memset(buf_ptr, 0xFF, buf_sz);
-		tget(start[s_fox_sync_set]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "S:%d:%d", procid, i);
-			ret = fox_sync_set(fhand, 1, key, strlen(key), (const char *)buf_ptr, buf_sz);
-			if (ret != 0) {
-				fprintf(stderr, " -- error: fox_sync_set(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-		}
-		tget(finish[s_fox_sync_set]);
-		free(buf_ptr);
-	}
+/* #define sync_sz 4 */
+/* 	BARRIER(A) */
+/* 	dbprintf("fox_sync_set\n"); */
+/* 	section[s_fox_sync_set] = "fox_sync_set"; */
+/* 	{ */
+/* 		size_t buf_sz = sync_sz; */
+/* 		char *buf_ptr = (char *)malloc(buf_sz); */
+/* 		memset(buf_ptr, 0xFF, buf_sz); */
+/* 		tget(start[s_fox_sync_set]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "S:%d:%d", procid, i); */
+/* 			ret = fox_sync_set(fhand, 1, key, strlen(key), (const char *)buf_ptr, buf_sz); */
+/* 			if (ret != 0) { */
+/* 				fprintf(stderr, " -- error: fox_sync_set(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 		} */
+/* 		tget(finish[s_fox_sync_set]); */
+/* 		free(buf_ptr); */
+/* 	} */
 
-	BARRIER(B)
-	dbprintf("fox_sync_get\n");
-	section[s_fox_sync_get] = "fox_sync_get";
-	{
-		size_t buf_sz;
-		char *buf_ptr;
-		tget(start[s_fox_sync_get]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "S:%d:%d", procid, i);
-			ret = fox_sync_get(fhand, 1, key, strlen(key), (char **)&buf_ptr, &buf_sz);
-			if (ret != 0 || buf_sz != sync_sz) {
-				fprintf(stderr, " -- error: fox_sync_get(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-			free(buf_ptr);
-		}
-		tget(finish[s_fox_sync_get]);
-	}
-	FLUSH
+/* 	BARRIER(B) */
+/* 	dbprintf("fox_sync_get\n"); */
+/* 	section[s_fox_sync_get] = "fox_sync_get"; */
+/* 	{ */
+/* 		size_t buf_sz; */
+/* 		char *buf_ptr; */
+/* 		tget(start[s_fox_sync_get]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "S:%d:%d", procid, i); */
+/* 			ret = fox_sync_get(fhand, 1, key, strlen(key), (char **)&buf_ptr, &buf_sz); */
+/* 			if (ret != 0 || buf_sz != sync_sz) { */
+/* 				fprintf(stderr, " -- error: fox_sync_get(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 			free(buf_ptr); */
+/* 		} */
+/* 		tget(finish[s_fox_sync_get]); */
+/* 	} */
+/* 	FLUSH */
 
-/* * * * * * * * * * broadcast * * * * * * * * * */
+/* /\* * * * * * * * * * broadcast * * * * * * * * * *\/ */
 
-#define broad_sz 4096
-	BARRIER(A)
-	if (procid == ROOT) dbprintf("fox_broad_set\n");
-	section[s_fox_broad_set] = "fox_broad_set";
-	if (procid == ROOT) { /* one broadcaster, not enough server memory at scale */
-		size_t buf_sz = broad_sz;
-		char *buf_ptr = (char *)malloc(buf_sz);
-		memset(buf_ptr, 0xFF, buf_sz);
-		tget(start[s_fox_broad_set]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "B:%d", i);
-			ret = fox_broad_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz);
-			if (ret != 0) {
-				fprintf(stderr, " -- error: fox_broad_set(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-		}
-		tget(finish[s_fox_broad_set]);
-		free(buf_ptr);
-	}
+/* #define broad_sz 4096 */
+/* 	BARRIER(A) */
+/* 	if (procid == ROOT) dbprintf("fox_broad_set\n"); */
+/* 	section[s_fox_broad_set] = "fox_broad_set"; */
+/* 	if (procid == ROOT) { /\* one broadcaster, not enough server memory at scale *\/ */
+/* 		size_t buf_sz = broad_sz; */
+/* 		char *buf_ptr = (char *)malloc(buf_sz); */
+/* 		memset(buf_ptr, 0xFF, buf_sz); */
+/* 		tget(start[s_fox_broad_set]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "B:%d", i); */
+/* 			ret = fox_broad_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz); */
+/* 			if (ret != 0) { */
+/* 				fprintf(stderr, " -- error: fox_broad_set(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 		} */
+/* 		tget(finish[s_fox_broad_set]); */
+/* 		free(buf_ptr); */
+/* 	} */
 
-	BARRIER(B)
-	dbprintf("fox_broad_get\n");
-	section[s_fox_broad_get] = "fox_broad_get";
-	{
-		size_t buf_sz;
-		char *buf_ptr;
-		tget(start[s_fox_broad_get]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "B:%d", i);
-			ret = fox_broad_get(fhand, key, strlen(key), (char **)&buf_ptr, &buf_sz);
-			if (ret != 0 || buf_sz != broad_sz) {
-				fprintf(stderr, " -- error: fox_broad_get(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-			free(buf_ptr);
-		}
-		tget(finish[s_fox_broad_get]);
-	}
-	FLUSH
+/* 	BARRIER(B) */
+/* 	dbprintf("fox_broad_get\n"); */
+/* 	section[s_fox_broad_get] = "fox_broad_get"; */
+/* 	{ */
+/* 		size_t buf_sz; */
+/* 		char *buf_ptr; */
+/* 		tget(start[s_fox_broad_get]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "B:%d", i); */
+/* 			ret = fox_broad_get(fhand, key, strlen(key), (char **)&buf_ptr, &buf_sz); */
+/* 			if (ret != 0 || buf_sz != broad_sz) { */
+/* 				fprintf(stderr, " -- error: fox_broad_get(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 			free(buf_ptr); */
+/* 		} */
+/* 		tget(finish[s_fox_broad_get]); */
+/* 	} */
+/* 	FLUSH */
 
-/* * * * * * * * * * reduce * * * * * * * * * */
+/* /\* * * * * * * * * * reduce * * * * * * * * * *\/ */
 
-#define reduce_sz sizeof(int)
-	BARRIER(A)
-	dbprintf("fox_reduce_set\n");
-	section[s_fox_reduce_set] = "fox_reduce_set";
-	{
-		size_t buf_sz = reduce_sz;
-		char *buf_ptr = (char *)malloc(buf_sz);
-		memcpy(buf_ptr, &procid, sizeof(int));
-		tget(start[s_fox_reduce_set]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "R:%d", i);
-			ret = fox_reduce_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz);
-			if (ret != 0) {
-				fprintf(stderr, " -- error: fox_reduce_set(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-		}
-		tget(finish[s_fox_reduce_set]);
-		free(buf_ptr);
-	}
+/* #define reduce_sz sizeof(int) */
+/* 	BARRIER(A) */
+/* 	dbprintf("fox_reduce_set\n"); */
+/* 	section[s_fox_reduce_set] = "fox_reduce_set"; */
+/* 	{ */
+/* 		size_t buf_sz = reduce_sz; */
+/* 		char *buf_ptr = (char *)malloc(buf_sz); */
+/* 		memcpy(buf_ptr, &procid, sizeof(int)); */
+/* 		tget(start[s_fox_reduce_set]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "R:%d", i); */
+/* 			ret = fox_reduce_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz); */
+/* 			if (ret != 0) { */
+/* 				fprintf(stderr, " -- error: fox_reduce_set(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 		} */
+/* 		tget(finish[s_fox_reduce_set]); */
+/* 		free(buf_ptr); */
+/* 	} */
 
-	BARRIER(B)
-	if (procid == ROOT) dbprintf("fox_reduce_get\n");
-	section[s_fox_reduce_get] = "fox_reduce_get";
-	if (procid == ROOT) { /* one reducer */
-		size_t buf_sz = reduce_sz;
-		char *buf_ptr = (char *)malloc(buf_sz);
-		tget(start[s_fox_reduce_get]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "R:%d", i);
-			memset(buf_ptr, 0, sizeof(int));
-			ret = fox_reduce_get(fhand, key, strlen(key), buf_ptr, buf_sz,
-				(void (*)(void *, void *))accumulate);
-			if (ret != 0 || *(int *)buf_ptr != nprocs*(nprocs-1)/2) {
-				fprintf(stderr, " -- error: fox_reduce_get(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-		}
-		tget(finish[s_fox_reduce_get]);
-		free(buf_ptr);
-	}
-	FLUSH
+/* 	BARRIER(B) */
+/* 	if (procid == ROOT) dbprintf("fox_reduce_get\n"); */
+/* 	section[s_fox_reduce_get] = "fox_reduce_get"; */
+/* 	if (procid == ROOT) { /\\* one reducer *\\/ */
+/* 		size_t buf_sz = reduce_sz; */
+/* 		char *buf_ptr = (char *)malloc(buf_sz); */
+/* 		tget(start[s_fox_reduce_get]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "R:%d", i); */
+/* 			memset(buf_ptr, 0, sizeof(int)); */
+/* 			ret = fox_reduce_get(fhand, key, strlen(key), buf_ptr, buf_sz, */
+/* 				(void (*)(void *, void *))accumulate); */
+/* 			if (ret != 0 || *(int *)buf_ptr != nprocs*(nprocs-1)/2) { */
+/* 				fprintf(stderr, " -- error: fox_reduce_get(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 		} */
+/* 		tget(finish[s_fox_reduce_get]); */
+/* 		free(buf_ptr); */
+/* 	} */
+/* 	FLUSH */
 
-/* * * * * * * * * * queue * * * * * * * * * */
+/* /\\* * * * * * * * * * queue * * * * * * * * * *\\/ */
 
-#define queue_sz_A 4
-	BARRIER(A)
-	dbprintf("fox_queue_set_A\n");
-	section[s_fox_queue_set_A] = "fox_queue_set_A";
-	{
-		size_t buf_sz = queue_sz_A;
-		char *buf_ptr = (char *)malloc(buf_sz);
-		memset(buf_ptr, 0xFF, buf_sz);
-		tget(start[s_fox_queue_set_A]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "QA:%d", procid);
-			ret = fox_queue_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz);
-			if (ret != 0) {
-				fprintf(stderr, " -- error: fox_queue_set(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-		}
-		tget(finish[s_fox_queue_set_A]);
-		free(buf_ptr);
-	}
+/* #define queue_sz_A 4 */
+/* 	BARRIER(A) */
+/* 	dbprintf("fox_queue_set_A\n"); */
+/* 	section[s_fox_queue_set_A] = "fox_queue_set_A"; */
+/* 	{ */
+/* 		size_t buf_sz = queue_sz_A; */
+/* 		char *buf_ptr = (char *)malloc(buf_sz); */
+/* 		memset(buf_ptr, 0xFF, buf_sz); */
+/* 		tget(start[s_fox_queue_set_A]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "QA:%d", procid); */
+/* 			ret = fox_queue_set(fhand, key, strlen(key), (const char *)buf_ptr, buf_sz); */
+/* 			if (ret != 0) { */
+/* 				fprintf(stderr, " -- error: fox_queue_set(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 		} */
+/* 		tget(finish[s_fox_queue_set_A]); */
+/* 		free(buf_ptr); */
+/* 	} */
 
-	BARRIER(B)
-	dbprintf("fox_queue_get_A\n");
-	section[s_fox_queue_get_A] = "fox_queue_get_A";
-	{
-		size_t buf_sz;
-		char *buf_ptr;
-		tget(start[s_fox_queue_get_A]);
-		for (i = 0; i < loop; i++) {
-			char key[MAX_KEY];
-			sprintf(key, "QA:%d", procid);
-			ret = fox_queue_get(fhand, key, strlen(key), (char **)&buf_ptr, &buf_sz);
-			if (ret != 0 || buf_sz != queue_sz_A) {
-				fprintf(stderr, " -- error: fox_queue_get(%s) = %d\n", key, ret);
-				exit(EXIT_FAILURE);
-			}
-			free(buf_ptr);
-		}
-		tget(finish[s_fox_queue_get_A]);
-	}
-	FLUSH
+/* 	BARRIER(B) */
+/* 	dbprintf("fox_queue_get_A\n"); */
+/* 	section[s_fox_queue_get_A] = "fox_queue_get_A"; */
+/* 	{ */
+/* 		size_t buf_sz; */
+/* 		char *buf_ptr; */
+/* 		tget(start[s_fox_queue_get_A]); */
+/* 		for (i = 0; i < loop; i++) { */
+/* 			char key[MAX_KEY]; */
+/* 			sprintf(key, "QA:%d", procid); */
+/* 			ret = fox_queue_get(fhand, key, strlen(key), (char **)&buf_ptr, &buf_sz); */
+/* 			if (ret != 0 || buf_sz != queue_sz_A) { */
+/* 				fprintf(stderr, " -- error: fox_queue_get(%s) = %d\n", key, ret); */
+/* 				exit(EXIT_FAILURE); */
+/* 			} */
+/* 			free(buf_ptr); */
+/* 		} */
+/* 		tget(finish[s_fox_queue_get_A]); */
+/* 	} */
+/* 	FLUSH */
 
 #define queue_sz_B (8*1024) /* test larger value lengths */
 	BARRIER(A)
@@ -492,10 +495,10 @@ main(int argc, char *argv[])
 		}
 		tget(finish[s_fox_queue_get_B]);
 	}
+        dbprintf("completed\n");
 	FLUSH
 
 /* * * * * * * * * * Collect Times * * * * * * * * * */
-
 	for (i = 0; i < S_COUNT; i++)
 		tbuf[i] = tsec(finish[i], start[i]) / loop * 1000000;
 #ifdef USE_MPI
@@ -511,9 +514,9 @@ main(int argc, char *argv[])
 		if (avgbuf[i] != maxbuf[i]) avgbuf[i] /= nprocs;
 
 	if (procid == ROOT) {
-		printf("section          |   max usec |   min usec |   avg usec\n");
-		for (i = 0; i < S_COUNT; i++)
-			printf("%-16s %12.0f %12.0f %12.0f\n", section[i], maxbuf[i], minbuf[i], avgbuf[i]);
+		/* printf("section          |   max usec |   min usec |   avg usec\n"); */
+		/* for (i = 0; i < S_COUNT; i++) */
+		/* 	printf("%-16s %12.0f %12.0f %12.0f\n", section[i], maxbuf[i], minbuf[i], avgbuf[i]); */
 	}
 
 	RENDEZVOUS(TERM)

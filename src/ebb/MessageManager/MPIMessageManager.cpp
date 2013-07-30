@@ -18,23 +18,24 @@
 #include <cstdint>
 #include <cstdlib>
 
-#include "ebb/SharedRoot.hpp"
+#include "ebb/DistributedRoot.hpp"
 #include "ebb/EventManager/EventManager.hpp"
 #include "ebb/MessageManager/MPIMessageManager.hpp"
 
 ebbrt::EbbRoot*
 ebbrt::MPIMessageManager::ConstructRoot()
 {
-  return new SharedRoot<MPIMessageManager>;
+  return new DistributedRoot<MPIMessageManager>;
 }
 
 namespace {
   class MessageHeader {
   public:
+    uint16_t context;
     ebbrt::EbbId ebb;
   };
 
-  constexpr int MESSAGE_MANAGER_TAG = 0x8812;
+  constexpr int MESSAGE_MANAGER_TAG = 0x88120000;
 }
 
 ebbrt::MPIMessageManager::MPIMessageManager()
@@ -52,21 +53,27 @@ ebbrt::MPIMessageManager::Send(NetworkId to,
   for (const auto& buffer : buffers) {
     len += buffer.second;
   }
-  char* aggregate = new char[len];
 
-  reinterpret_cast<MessageHeader*>(aggregate)->ebb = id;
-  char* location = aggregate + sizeof(MessageHeader);
+  std::vector<char> buf(len);
+
+  auto mh = reinterpret_cast<MessageHeader*>(buf.data());
+  mh->context = lrt::event::get_location();
+  mh->ebb = id;
+  char* location = buf.data() + sizeof(MessageHeader);
   for (const auto& buffer : buffers) {
     memcpy(location, buffer.first, buffer.second);
     location += buffer.second;
   }
 
-  if (MPI_Send(aggregate, len, MPI_CHAR, to.rank, MESSAGE_MANAGER_TAG,
-               MPI_COMM_WORLD) != MPI_SUCCESS) {
+  bufs_.push_back(std::move(buf));
+  MPI_Request req;
+  if (MPI_Isend(bufs_.back().data(), len, MPI_CHAR,
+                to.rank, MESSAGE_MANAGER_TAG | to.context, MPI_COMM_WORLD,
+                &req) != MPI_SUCCESS) {
     throw std::runtime_error("MPI_Send failed");
   }
+  reqs_.push_back(std::move(req));
 
-  delete[] aggregate;
   //FIXME: do this asynchronously
   cb();
 }
@@ -88,23 +95,34 @@ ebbrt::MPIMessageManager::StartListening()
 int
 ebbrt::MPIMessageManager::CheckForInterrupt()
 {
-  // int flag;
-  // if (MPI_Iprobe(MPI_ANY_SOURCE, MESSAGE_MANAGER_TAG, MPI_COMM_WORLD,
-  //                &flag, &status_) != MPI_SUCCESS) {
-  //   throw std::runtime_error("Iprobe failed");
-  // }
+  if (!reqs_.empty()) {
+    int index;
+    int flag;
+    MPI_Status status;
+    do {
+      if (MPI_Testany(reqs_.size(), reqs_.data(), &index,
+                      &flag, &status) != MPI_SUCCESS) {
+        throw std::runtime_error("Testany failed");
+      }
+      if (flag) {
+        reqs_.erase(reqs_.begin() + index);
+        bufs_.erase(bufs_.begin() + index);
+      }
+    } while (flag && !reqs_.empty());
+  }
 
-  // if (flag) {
-  //   std::cerr << "got message" << std::endl;
-  //   return interrupt_;
-  // } else {
-  //   return -1;
-  // }
-  if (MPI_Probe(MPI_ANY_SOURCE, MESSAGE_MANAGER_TAG, MPI_COMM_WORLD,
-                &status_) != MPI_SUCCESS) {
+  int flag;
+  if (MPI_Iprobe(MPI_ANY_SOURCE, MESSAGE_MANAGER_TAG | get_location(),
+                 MPI_COMM_WORLD,
+                 &flag, &status_) != MPI_SUCCESS) {
     throw std::runtime_error("Iprobe failed");
   }
-  return interrupt_;
+
+  if (flag) {
+    return interrupt_;
+  } else {
+    return -1;
+  }
 }
 
 void
@@ -125,6 +143,7 @@ ebbrt::MPIMessageManager::DispatchMessage()
   EbbRef<EbbRep> ebb {mh->ebb};
   NetworkId from;
   from.rank = status.MPI_SOURCE;
+  from.context = mh->context;
   ebb->HandleMessage(from,
                      buf + sizeof(MessageHeader),
                      len - sizeof(MessageHeader));

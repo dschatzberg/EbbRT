@@ -55,6 +55,7 @@ ebbrt::RemoteConsole::Write(const char* str,
     BufferList list = BufferList(1, std::make_pair(str, strlen(str) + 1));
     NetworkId id;
     id.rank = 0;
+    id.context = 0;
     message_manager->Send(id, console, std::move(list));
   }
 #endif
@@ -73,7 +74,8 @@ ebbrt::RemoteConsole::Write(const char* str,
 }
 
 void
-ebbrt::RemoteConsole::HandleMessage(const uint8_t* msg,
+ebbrt::RemoteConsole::HandleMessage(NetworkId from,
+                                    const char* msg,
                                     size_t len)
 {
 #ifdef __linux__

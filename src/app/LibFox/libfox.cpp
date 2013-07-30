@@ -161,6 +161,7 @@ fox_sync_set(fox_ptr fhand, unsigned delta,
              const char* key, size_t key_sz,
              const char* value, size_t value_sz)
 {
+  //std::cerr << fhand->procid << ": " << __func__ << std::endl;
   fhand->table->SyncSet(key, key_sz,
                         value, value_sz,
                         delta);
@@ -173,6 +174,7 @@ fox_sync_get(fox_ptr fhand, unsigned delta,
              const char *key, size_t key_sz,
              char **pvalue, size_t *pvalue_sz)
 {
+  //std::cerr << fhand->procid << ": " << __func__ << std::endl;
   std::mutex m;
   std::condition_variable cv;
   bool finished = false;
@@ -234,6 +236,7 @@ fox_queue_set(fox_ptr fhand,
   }
 
   std::string str2{key, key_sz};
+  str2 += "_";
   str2 += std::to_string(qidx);
   fox_sync_set(fhand, 1, str2.c_str(), str2.length(), value, value_sz);
 
@@ -265,6 +268,7 @@ fox_queue_get(fox_ptr fhand,
   }
 
   std::string str2{key, key_sz};
+  str2 += "_";
   str2 += std::to_string(qidx);
   fox_sync_get(fhand, 1, str2.c_str(), str2.length(), pvalue, pvalue_sz);
 
@@ -325,6 +329,7 @@ fox_reduce_set(fox_ptr fhand,
 {
   std::string str{key, key_sz};
 
+  str += "_";
   str += std::to_string(fhand->procid);
 
   return fox_sync_set(fhand, 1, str.c_str(), str.length(), value, value_sz);
@@ -339,6 +344,7 @@ fox_reduce_get(fox_ptr fhand,
 {
   for (int idx = 0; idx < fhand->nprocs; ++idx) {
     std::string str{key, key_sz};
+    str += "_";
     str += std::to_string(idx);
 
     char* data_ptr;

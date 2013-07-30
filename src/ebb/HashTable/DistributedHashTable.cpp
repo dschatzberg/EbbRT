@@ -50,43 +50,26 @@ ebbrt::DistributedHashTable::Get(const char* key,
 {
   auto hasher = table_.hash_function();
   auto location = home(hasher(std::string(key, key_size)));
-  if (local(location)) {
-    lock_.Lock();
-    auto it = table_.find(std::string(key, key_size));
-    //FIXME: do this asynchronously
-    if (it == table_.end()) {
-      lock_.Unlock();
-      cb(nullptr, 0);
-    } else {
-      std::string str = it->second;
-      lock_.Unlock();
-      cb(str.c_str(), str.length());
-    }
-    if (sent) {
-      sent();
-    }
-  } else {
-    auto header = new GetRequest;
-    header->op = GET_REQUEST;
-    auto op_id = op_id_.fetch_add(1, std::memory_order_relaxed);
-    header->op_id = op_id;
+  auto header = new GetRequest;
+  header->op = GET_REQUEST;
+  auto op_id = op_id_.fetch_add(1, std::memory_order_relaxed);
+  header->op_id = op_id;
 
-    BufferList list = {
-      std::pair<const void*, size_t>(header, sizeof(GetRequest)),
-      std::pair<const void*, size_t>(key, key_size)
-    };
+  BufferList list = {
+    std::pair<const void*, size_t>(header, sizeof(GetRequest)),
+    std::pair<const void*, size_t>(key, key_size)
+  };
 
-    lock_.Lock();
-    cb_map_[op_id] = cb;
-    lock_.Unlock();
-    message_manager->Send(location, hashtable, std::move(list),
-                          [=]() {
-                            delete header;
-                            if (sent) {
-                              sent();
-                            }
-                          });
-  }
+  lock_.Lock();
+  cb_map_[op_id] = cb;
+  lock_.Unlock();
+  message_manager->Send(location, hashtable, std::move(list),
+                        [=]() {
+                          delete header;
+                          if (sent) {
+                            sent();
+                          }
+                        });
 }
 
 void
@@ -98,33 +81,23 @@ ebbrt::DistributedHashTable::Set(const char* key,
 {
   auto hasher = table_.hash_function();
   auto location = home(hasher(std::string(key, key_size)));
-  if (local(location)) {
-    lock_.Lock();
-    table_[std::string(key, key_size)] = std::string(val, val_size);
-    lock_.Unlock();
-    //FIXME: do this asynchronously
-    if (sent) {
-      sent();
-    }
-  } else {
-    auto header = new SetRequest;
-    header->op = SET_REQUEST;
-    header->key_size = key_size;
+  auto header = new SetRequest;
+  header->op = SET_REQUEST;
+  header->key_size = key_size;
 
-    BufferList list = {
-      std::pair<const void*, size_t>(header, sizeof(SetRequest)),
-      std::pair<const void*, size_t>(key, key_size),
-      std::pair<const void*, size_t>(val, val_size)
-    };
+  BufferList list = {
+    std::pair<const void*, size_t>(header, sizeof(SetRequest)),
+    std::pair<const void*, size_t>(key, key_size),
+    std::pair<const void*, size_t>(val, val_size)
+  };
 
-    message_manager->Send(location, hashtable, std::move(list),
-                          [=]() {
-                            delete header;
-                            if (sent) {
-                              sent();
-                            }
-                          });
-  }
+  message_manager->Send(location, hashtable, std::move(list),
+                        [=]() {
+                          delete header;
+                          if (sent) {
+                            sent();
+                          }
+                        });
 }
 
 void
@@ -136,55 +109,27 @@ ebbrt::DistributedHashTable::SyncGet(const char* key,
 {
   auto hasher = table_.hash_function();
   auto location = home(hasher(std::string(key, key_size)));
-  if (local(location)) {
-    lock_.Lock();
-    auto& sync_ent = sync_table_[std::string(key, key_size)];
-    if (sync_ent.first < waitfor) {
-      //Append callback
-      auto op_id = op_id_.fetch_add(1, std::memory_order_relaxed);
-      cb_map_[op_id] = cb;
-      sync_ent.second.insert(std::make_pair(waitfor,
-                                            std::make_pair(myid_.rank, op_id)));
-      lock_.Unlock();
-    } else {
-      //FIXME: do this asynchronously
-      auto it = table_.find(std::string(key, key_size));
-      if (it == table_.end()) {
-        lock_.Unlock();
-        cb(nullptr, 0);
-      } else {
-        std::string str = it->second;
-        lock_.Unlock();
-        cb(str.c_str(), str.length());
-      }
-    }
-    //FIXME: do this asynchronously
-    if (sent) {
-      sent();
-    }
-  } else {
-    auto header = new SyncGetRequest;
-    header->op = SYNC_GET_REQUEST;
-    auto op_id = op_id_.fetch_add(1, std::memory_order_relaxed);
-    header->op_id = op_id;
-    header->waitfor = waitfor;
+  auto header = new SyncGetRequest;
+  header->op = SYNC_GET_REQUEST;
+  auto op_id = op_id_.fetch_add(1, std::memory_order_relaxed);
+  header->op_id = op_id;
+  header->waitfor = waitfor;
 
-    BufferList list = {
-      std::pair<const void*, size_t>(header, sizeof(SyncGetRequest)),
-      std::pair<const void*, size_t>(key, key_size)
-    };
+  BufferList list = {
+    std::pair<const void*, size_t>(header, sizeof(SyncGetRequest)),
+    std::pair<const void*, size_t>(key, key_size)
+  };
 
-    lock_.Lock();
-    cb_map_[op_id] = cb;
-    lock_.Unlock();
-    message_manager->Send(location, hashtable, std::move(list),
-                          [=]() {
-                            delete header;
-                            if (sent) {
-                              sent();
-                            }
-                          });
-  }
+  lock_.Lock();
+  cb_map_[op_id] = cb;
+  lock_.Unlock();
+  message_manager->Send(location, hashtable, std::move(list),
+                        [=]() {
+                          delete header;
+                          if (sent) {
+                            sent();
+                          }
+                        });
 }
 
 void
@@ -197,69 +142,24 @@ ebbrt::DistributedHashTable::SyncSet(const char* key,
 {
   auto hasher = table_.hash_function();
   auto location = home(hasher(std::string(key, key_size)));
-  if (local(location)) {
-    lock_.Lock();
-    table_[std::string(key, key_size)] = std::string(val, val_size);
-    auto& sync_ent = sync_table_[std::string(key, key_size)];
-    sync_ent.first += delta;
-    for (auto it = sync_ent.second.begin();
-         it != sync_ent.second.upper_bound(sync_ent.first);
-         ++it) {
-      if (it->second.first != myid_.rank) {
-        auto header = new GetResponse;
-        header->op = GET_RESPONSE;
-        header->op_id = it->second.second;
+  auto header = new SyncSetRequest;
+  header->op = SYNC_SET_REQUEST;
+  header->key_size = key_size;
+  header->delta = delta;
 
-        //allocate and copy value
-        BufferList list = {
-          std::pair<const void*, size_t>(header, sizeof(GetResponse)),
-          std::pair<const void*, size_t>(val, val_size)
-        };
-        NetworkId to;
-        to.rank = it->second.first;
-        message_manager->Send(to, hashtable, std::move(list),
-                              [=]() {
-                                delete header;
-                                if (sent) {
-                                  sent();
-                                }
-                              });
-      } else {
-        auto cb_it = cb_map_.find(it->second.second);
-        assert(cb_it != cb_map_.end());
-        auto cb = cb_it->second;
-        cb_map_.erase(cb_it);
-        //FIXME: do asynchronously
-        cb(val, val_size);
-      }
-    }
-    sync_ent.second.erase(sync_ent.second.begin(),
-                          sync_ent.second.upper_bound(sync_ent.first));
-    lock_.Unlock();
-    //FIXME: do this asynchronously
-    if (sent) {
-      sent();
-    }
-  } else {
-    auto header = new SyncSetRequest;
-    header->op = SYNC_SET_REQUEST;
-    header->key_size = key_size;
-    header->delta = delta;
+  BufferList list = {
+    std::pair<const void*, size_t>(header, sizeof(SyncSetRequest)),
+    std::pair<const void*, size_t>(key, key_size),
+    std::pair<const void*, size_t>(val, val_size)
+  };
 
-    BufferList list = {
-      std::pair<const void*, size_t>(header, sizeof(SyncSetRequest)),
-      std::pair<const void*, size_t>(key, key_size),
-      std::pair<const void*, size_t>(val, val_size)
-    };
-
-    message_manager->Send(location, hashtable, std::move(list),
-                          [=]() {
-                            delete header;
-                            if (sent) {
-                              sent();
-                            }
-                          });
-  }
+  message_manager->Send(location, hashtable, std::move(list),
+                        [=]() {
+                          delete header;
+                          if (sent) {
+                            sent();
+                          }
+                        });
 }
 
 void
@@ -270,34 +170,26 @@ ebbrt::DistributedHashTable::Increment(const char* key,
 {
   auto hasher = table_.hash_function();
   auto location = home(hasher(std::string(key, key_size)));
-  if (local(location)) {
-    lock_.Lock();
-    auto val = val_table_[std::string(key, key_size)]++;
-    lock_.Unlock();
-    //FIXME: do this asynchronously
-    func(val);
-  } else {
-    auto header = new IncrementRequest;
-    header->op = INCREMENT_REQUEST;
-    auto op_id = op_id_.fetch_add(1, std::memory_order_relaxed);
-    header->op_id = op_id;
+  auto header = new IncrementRequest;
+  header->op = INCREMENT_REQUEST;
+  auto op_id = op_id_.fetch_add(1, std::memory_order_relaxed);
+  header->op_id = op_id;
 
-    BufferList list = {
-      std::pair<const void*, size_t>(header, sizeof(IncrementRequest)),
-      std::pair<const void*, size_t>(key, key_size)
-    };
+  BufferList list = {
+    std::pair<const void*, size_t>(header, sizeof(IncrementRequest)),
+    std::pair<const void*, size_t>(key, key_size)
+  };
 
-    lock_.Lock();
-    inc_cb_map_[op_id] = func;
-    lock_.Unlock();
-    message_manager->Send(location, hashtable, std::move(list),
-                          [=]() {
-                            delete header;
-                            if (sent) {
-                              sent();
-                            }
-                          });
-  }
+  lock_.Lock();
+  inc_cb_map_[op_id] = func;
+  lock_.Unlock();
+  message_manager->Send(location, hashtable, std::move(list),
+                        [=]() {
+                          delete header;
+                          if (sent) {
+                            sent();
+                          }
+                        });
 }
 
 void
@@ -422,7 +314,7 @@ ebbrt::DistributedHashTable::HandleSyncGetRequest(NetworkId from,
   auto& sync_ent = sync_table_[std::string(key, len)];
   if (sync_ent.first < req.waitfor) {
     sync_ent.second.insert(std::make_pair(req.waitfor,
-                                          std::make_pair(from.rank, req.op_id)));
+                                          std::make_pair(from, req.op_id)));
     lock_.Unlock();
   } else {
     auto it = table_.find(std::string(key, len));
@@ -471,7 +363,7 @@ ebbrt::DistributedHashTable::HandleSyncSetRequest(const SyncSetRequest& req,
   for (auto it = sync_ent.second.begin();
        it != sync_ent.second.upper_bound(sync_ent.first);
        ++it) {
-    if (it->second.first != myid_.rank) {
+    if (it->second.first != myid_) {
       auto header = new GetResponse;
       header->op = GET_RESPONSE;
       header->op_id = it->second.second;
@@ -482,8 +374,7 @@ ebbrt::DistributedHashTable::HandleSyncSetRequest(const SyncSetRequest& req,
         std::pair<const void*, size_t>(header, sizeof(GetResponse)),
         std::pair<const void*, size_t>(val->c_str(), val->length())
       };
-      NetworkId to;
-      to.rank = it->second.first;
+      NetworkId to = it->second.first;
 
       message_manager->Send(to, hashtable, std::move(list),
                             [=]() {

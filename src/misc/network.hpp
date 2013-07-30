@@ -28,7 +28,16 @@ namespace ebbrt {
   class NetworkId {
   public:
     int rank;
+    uint16_t context;
   };
+  inline bool operator==(const NetworkId& lhs, const NetworkId& rhs)
+  {
+    return lhs.rank == rhs.rank && lhs.context == rhs.context;
+  }
+  inline bool operator!=(const NetworkId& lhs, const NetworkId& rhs)
+  {
+    return !operator==(lhs,rhs);
+  }
 #endif
 }
 
